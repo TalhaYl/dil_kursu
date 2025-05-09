@@ -7,8 +7,11 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 // Import routes
-const authRoutes = require('./routes/authRoutes');
 const branchRoutes = require('./routes/branchRoutes');
+const userRoutes = require('./routes/userRoutes');
+const courseRoutes =require('./routes/courseRoutes');
+const infoRoutes =require('./routes/infoRoutes');
+
 
 const app = express();
 
@@ -18,8 +21,13 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // Routes
-app.use('/api/auth', authRoutes);
 app.use('/api/branches', branchRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/courseroutes', courseRoutes);
+app.use('/api/infoRouetes', infoRoutes);
+
+
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {

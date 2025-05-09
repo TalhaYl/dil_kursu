@@ -17,12 +17,7 @@ const routes = [
         name: 'register',
         component: () => import('../views/RegisterPage.vue')
     },
-    {
-        path: '/superadmin',
-        name: 'superadmin',
-        component: () => import('../views/SuperAdmin.vue'),
-        meta: { requiresAuth: true, role: 'superadmin' }
-    },
+   
     {
         path: '/admin',
         name: 'admin',
