@@ -7,11 +7,13 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 // Import routes
-const branchRoutes = require('./routes/branchRoutes');
 const userRoutes = require('./routes/userRoutes');
-const courseRoutes =require('./routes/courseRoutes');
-const infoRoutes =require('./routes/infoRoutes');
-
+const classroomRoutes = require('./routes/classroomRoutes');
+const teacherRoutes = require('./routes/teacherRoutes');
+const courseRoutes = require('./routes/courseRoutes');
+const infoRoutes = require('./routes/infoRoutes');
+const branchRoutes = require('./routes/branchRoutes');
+const postRoutes = require('./routes/postRoutes'); // Yeni post route ekleniyor
 
 const app = express();
 
@@ -21,13 +23,13 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // Routes
-app.use('/api/branches', branchRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/courseroutes', courseRoutes);
-app.use('/api/infoRouetes', infoRoutes);
-
-
-
+app.use('/api/users', userRoutes); // Kullanıcı route'ları
+app.use('/api/classrooms', classroomRoutes); // Sınıf route'ları
+app.use('/api/teachers', teacherRoutes); // Öğretmen route'ları
+app.use('/api/courses', courseRoutes); // Kurs route'ları
+app.use('/api/info', infoRoutes); // Bilgi route'ları
+app.use('/api/branches', branchRoutes); // Branş route'ları
+app.use('/api/posts', postRoutes); // Yeni eklenen post route'ları
 
 // Error handling middleware
 app.use((err, req, res, next) => {

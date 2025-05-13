@@ -2,28 +2,8 @@ const db = require('../config/db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-
-
+// JWT secret'ı .env'den al
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-
-const authenticate = (req, res, next) => {
-    const token = req.headers['authorization'];
-
-    if (!token) {
-        return res.status(403).json({ error: 'Token bulunamadı' });
-    }
-
-    jwt.verify(token, JWT_SECRET, (err, decoded) => {
-        if (err) {
-            return res.status(401).json({ error: 'Geçersiz token' });
-        }
-        req.user = decoded;  // Token'dan kullanıcı bilgilerini al
-        next();
-    });
-};
-
-module.exports = authenticate;
-
 
 // Kullanıcı girişi
 const login = async (req, res) => {
@@ -135,9 +115,6 @@ const register = async (req, res) => {
     }
 };
 
-
-
-
 // Kullanıcı profili
 const getProfile = async (req, res) => {
     try {
@@ -156,7 +133,6 @@ const getProfile = async (req, res) => {
         res.status(500).json({ error: 'Sunucu hatası' });
     }
 };
-
 
 module.exports = {
     login,

@@ -48,6 +48,28 @@
           </select>
         </div>
 
+        <div v-if="formData.role === 'student'" class="form-group">
+          <label for="phone">Telefon</label>
+          <input 
+            type="text" 
+            id="phone" 
+            v-model="formData.phone" 
+            required
+            placeholder="Telefon numaranızı giriniz"
+          >
+        </div>
+
+        <div v-if="formData.role === 'teacher'" class="form-group">
+          <label for="languages">Diller</label>
+          <input 
+            type="text" 
+            id="languages" 
+            v-model="formData.languages" 
+            required
+            placeholder="Ders verebileceğiniz dilleri giriniz (örn. İngilizce, Almanca)"
+          >
+        </div>
+
         <div v-if="message" :class="['message', message.type]">
           {{ message.text }}
         </div>
@@ -73,7 +95,9 @@ export default {
         name: '',
         email: '',
         password: '',
-        role: ''
+        role: '',
+        phone: '',
+        languages: ''
       },
       message: null
     }
@@ -94,11 +118,7 @@ export default {
       } catch (error) {
         let errorMessage = 'Kayıt sırasında bir hata oluştu.';
         if (error.response) {
-          if (error.response.data.error === 'Bu e-posta adresi zaten kullanılıyor') {
-            errorMessage = 'Bu e-posta adresi zaten kullanılıyor.';
-          } else if (error.response.data.error === 'Tüm alanlar gereklidir') {
-            errorMessage = 'Lütfen tüm alanları doldurun.';
-          }
+          errorMessage = error.response.data.error || errorMessage;
         }
         this.message = {
           type: 'error',
@@ -112,7 +132,6 @@ export default {
   }
 }
 </script>
-
 <style scoped>
 .register-container {
   min-height: 100vh;
