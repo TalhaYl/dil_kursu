@@ -14,7 +14,12 @@ const login = async (req, res) => {
     }
     
     try {
-        const [users] = await db.query('SELECT u.*, r.name as role FROM users u JOIN roles r ON u.role_id = r.id WHERE u.email = ?', [email]);
+        const [users] = await db.query(`
+            SELECT u.*, r.role_name as role 
+            FROM users u 
+            JOIN roles r ON u.role_id = r.id 
+            WHERE u.email = ?
+        `, [email]);
 
         if (users.length === 0) {
             return res.status(401).json({ error: 'Geçersiz email veya şifre' });
@@ -53,13 +58,12 @@ const login = async (req, res) => {
 
 // Kullanıcı kaydı
 const register = async (req, res) => {
-    const { email, password, role } = req.body;
+    const { name, email, password, role, phone, address, branch_id, languages, working_days } = req.body;
     
-    if (!email || !password) {
-        return res.status(400).json({ error: 'Email ve şifre gerekli' });
+    if (!email || !password || !name || !role) {
+        return res.status(400).json({ error: 'Email, şifre, isim ve rol gerekli' });
     }
 
-    // Geçerli rol kontrolü
     const validRoles = ['student', 'teacher', 'admin', 'superadmin'];
     if (!validRoles.includes(role)) {
         return res.status(400).json({ error: 'Geçersiz rol' });
@@ -76,22 +80,37 @@ const register = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 12);  // 12 salt round ile daha güçlü şifreleme
 
         // Rolün ID'sini al
-        const [roles] = await db.query('SELECT id FROM roles WHERE name = ?', [role]);
+        const [roles] = await db.query('SELECT id FROM roles WHERE role_name = ?', [role]);
 
         if (roles.length === 0) {
             return res.status(400).json({ error: 'Geçersiz rol' });
         }
 
         // Yeni kullanıcıyı veritabanına ekle
-        const [result] = await db.query(
-            'INSERT INTO users (email, password, role_id) VALUES (?, ?, ?)',
-            [email, hashedPassword, roles[0].id]
+        const [userResult] = await db.query(
+            'INSERT INTO users (name, email, password, role_id) VALUES (?, ?, ?, ?)',
+            [name, email, hashedPassword, roles[0].id]
         );
+
+        const userId = userResult.insertId;
+
+        // Role göre öğretmen veya öğrenci tablosuna ekle
+        if (role === 'teacher') {
+            await db.query(
+                'INSERT INTO teachers (user_id, languages, working_days, branch_id) VALUES (?, ?, ?, ?)', 
+                [userId, JSON.stringify(languages || []), JSON.stringify(working_days || []), branch_id || null]
+            );
+        } else if (role === 'student') {
+            await db.query(
+                'INSERT INTO students (user_id, phone, address, branch_id) VALUES (?, ?, ?, ?)', 
+                [userId, phone || '', address || '', branch_id || null]
+            );
+        }
 
         // JWT Token oluştur
         const token = jwt.sign(
             { 
-                id: result.insertId, 
+                id: userId, 
                 email: email, 
                 role: role 
             }, 
@@ -104,7 +123,8 @@ const register = async (req, res) => {
             message: 'Kullanıcı başarıyla oluşturuldu',
             token,
             user: {
-                id: result.insertId,
+                id: userId,
+                name: name,
                 email: email,
                 role: role
             }
@@ -118,10 +138,12 @@ const register = async (req, res) => {
 // Kullanıcı profili
 const getProfile = async (req, res) => {
     try {
-        const [users] = await db.query(
-            'SELECT u.id, u.email, r.name as role FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ?',
-            [req.user.id] // req.user, token'dan gelen kullanıcı bilgisini içerir
-        );
+        const [users] = await db.query(`
+            SELECT u.id, u.name, u.email, r.role_name as role 
+            FROM users u 
+            JOIN roles r ON u.role_id = r.id 
+            WHERE u.id = ?
+        `, [req.user.id]);
 
         if (users.length === 0) {
             return res.status(404).json({ error: 'Kullanıcı bulunamadı' });

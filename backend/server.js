@@ -13,7 +13,8 @@ const teacherRoutes = require('./routes/teacherRoutes');
 const courseRoutes = require('./routes/courseRoutes');
 const infoRoutes = require('./routes/infoRoutes');
 const branchRoutes = require('./routes/branchRoutes');
-const postRoutes = require('./routes/postRoutes'); // Yeni post route ekleniyor
+const postRoutes = require('./routes/postRoutes');
+const aboutRoutes = require('./routes/aboutRoutes');
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.use('/api/courses', courseRoutes); // Kurs route'ları
 app.use('/api/info', infoRoutes); // Bilgi route'ları
 app.use('/api/branches', branchRoutes); // Branş route'ları
 app.use('/api/posts', postRoutes); // Yeni eklenen post route'ları
+app.use('/api/about', aboutRoutes); // Yeni eklenen about route'ları
 
 // Error handling middleware
 app.use((err, req, res, next) => {
