@@ -4,7 +4,7 @@
     :columns="columns"
     :items="teachers"
     :form-fields="formFields"
-    api-endpoint="/api/teachers"
+    api-endpoint="/teachers"
     @create="handleCreate"
     @update="handleUpdate"
     @delete="handleDelete"
@@ -14,7 +14,7 @@
 <script>
 import { ref, onMounted } from 'vue'
 import AdminCrud from '@/components/AdminCrud.vue'
-import axios from 'axios'
+import api from '@/services/api'
 
 export default {
   name: 'TeachersView',
@@ -28,17 +28,17 @@ export default {
     const columns = [
       { key: 'name', label: 'Ad Soyad' },
       { key: 'email', label: 'E-posta' },
-      { key: 'languages', label: 'Diller' },
-      { key: 'working_days', label: 'Çalışma Günleri' },
-      { key: 'branch_name', label: 'Şube' }
+      { key: 'phone', label: 'Telefon' },
+      { key: 'branch_name', label: 'Şube' },
+      { key: 'address', label: 'Adres' }
     ]
 
     const formFields = [
       { key: 'name', label: 'Ad Soyad', type: 'text', required: true },
       { key: 'email', label: 'E-posta', type: 'email', required: true },
       { key: 'password', label: 'Şifre', type: 'text', required: true },
-      { key: 'languages', label: 'Diller', type: 'text', required: true },
-      { key: 'working_days', label: 'Çalışma Günleri', type: 'text', required: true },
+      { key: 'phone', label: 'Telefon', type: 'text', required: true },
+      { key: 'address', label: 'Adres', type: 'text', required: true },
       {
         key: 'branch_id',
         label: 'Şube',
@@ -50,7 +50,7 @@ export default {
 
     const fetchTeachers = async () => {
       try {
-        const response = await axios.get('/api/teachers')
+        const response = await api.get('/teachers')
         teachers.value = response.data
       } catch (error) {
         console.error('Error fetching teachers:', error)
@@ -59,7 +59,7 @@ export default {
 
     const fetchBranches = async () => {
       try {
-        const response = await axios.get('/api/branches')
+        const response = await api.get('/branches')
         branches.value = response.data
         formFields.find(field => field.key === 'branch_id').options = branches.value.map(branch => ({
           value: branch.id,
@@ -72,7 +72,7 @@ export default {
 
     const handleCreate = async (data) => {
       try {
-        await axios.post('/api/teachers', data)
+        await api.post('/teachers', data)
         await fetchTeachers()
       } catch (error) {
         console.error('Error creating teacher:', error)
@@ -81,7 +81,7 @@ export default {
 
     const handleUpdate = async ({ id, data }) => {
       try {
-        await axios.put(`/api/teachers/${id}`, data)
+        await api.put(`/teachers/${id}`, data)
         await fetchTeachers()
       } catch (error) {
         console.error('Error updating teacher:', error)
@@ -90,7 +90,7 @@ export default {
 
     const handleDelete = async (id) => {
       try {
-        await axios.delete(`/api/teachers/${id}`)
+        await api.delete(`/teachers/${id}`)
         await fetchTeachers()
       } catch (error) {
         console.error('Error deleting teacher:', error)

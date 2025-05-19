@@ -1,4 +1,4 @@
-<template>
+ad<template>
   <admin-crud
     title="Kurs Yönetimi"
     :columns="columns"
