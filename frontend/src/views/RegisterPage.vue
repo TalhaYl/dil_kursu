@@ -6,6 +6,7 @@
         <button @click="goToHome" class="home-btn">Anasayfaya Dön</button>
       </div>
       <form @submit.prevent="handleRegister" class="register-form">
+        <!-- Ortak Bilgiler -->
         <div class="form-group">
           <label for="name">Ad Soyad</label>
           <input 
@@ -35,7 +36,20 @@
             id="password" 
             v-model="formData.password" 
             required
-            placeholder="Şifrenizi giriniz"
+            minlength="6"
+            placeholder="En az 6 karakter"
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="phone">Telefon</label>
+          <input 
+            type="tel" 
+            id="phone" 
+            v-model="formData.phone" 
+            required
+            pattern="[0-9]{10}"
+            placeholder="5XX XXX XX XX"
           >
         </div>
 
@@ -48,33 +62,50 @@
           </select>
         </div>
 
-        <div v-if="formData.role === 'student'" class="form-group">
-          <label for="phone">Telefon</label>
-          <input 
-            type="text" 
-            id="phone" 
-            v-model="formData.phone" 
-            required
-            placeholder="Telefon numaranızı giriniz"
-          >
+        <!-- Şube Seçimi (Sadece öğretmenler için) -->
+        <div class="form-group" v-if="formData.role === 'teacher'">
+          <label for="branch">Şube</label>
+          <select id="branch" v-model="formData.branch_id" required>
+            <option value="">Şube seçiniz</option>
+            <option v-for="branch in branches" :key="branch.id" :value="branch.id">
+              {{ branch.name }}
+            </option>
+          </select>
         </div>
 
-        <div v-if="formData.role === 'teacher'" class="form-group">
-          <label for="languages">Diller</label>
-          <input 
-            type="text" 
-            id="languages" 
-            v-model="formData.languages" 
-            required
-            placeholder="Ders verebileceğiniz dilleri giriniz (örn. İngilizce, Almanca)"
-          >
-        </div>
+        <!-- Öğretmen için ek alanlar -->
+        <template v-if="formData.role === 'teacher'">
+          <div class="form-group">
+            <label for="languages">Bildiği Diller</label>
+            <select id="languages" v-model="formData.languages" multiple required>
+              <option v-for="language in languages" :key="language.id" :value="language.id">
+                {{ language.name }}
+              </option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="working_days">Çalışma Günleri</label>
+            <div class="checkbox-group">
+              <label v-for="day in workingDays" :key="day.value" class="checkbox-label">
+                <input 
+                  type="checkbox" 
+                  :value="day.value" 
+                  v-model="formData.working_days"
+                >
+                {{ day.label }}
+              </label>
+            </div>
+          </div>
+        </template>
 
         <div v-if="message" :class="['message', message.type]">
           {{ message.text }}
         </div>
 
-        <button type="submit" class="register-btn">Kayıt Ol</button>
+        <button type="submit" class="register-btn" :disabled="loading">
+          {{ loading ? 'Kaydediliyor...' : 'Kayıt Ol' }}
+        </button>
       </form>
 
       <div class="login-link">
@@ -86,6 +117,7 @@
 
 <script>
 import axios from 'axios';
+import { ElMessage } from 'element-plus';
 
 export default {
   name: 'RegisterPage',
@@ -95,22 +127,47 @@ export default {
         name: '',
         email: '',
         password: '',
-        role: '',
         phone: '',
-        languages: ''
+        role: '',
+        branch_id: '',
+        languages: [],
+        working_days: []
       },
+      branches: [],
+      languages: [],
+      workingDays: [
+        { value: 'monday', label: 'Pazartesi' },
+        { value: 'tuesday', label: 'Salı' },
+        { value: 'wednesday', label: 'Çarşamba' },
+        { value: 'thursday', label: 'Perşembe' },
+        { value: 'friday', label: 'Cuma' },
+        { value: 'saturday', label: 'Cumartesi' },
+        { value: 'sunday', label: 'Pazar' }
+      ],
+      loading: false,
       message: null
+    }
+  },
+  async created() {
+    try {
+      // Şubeleri yükle
+      const branchesResponse = await axios.get('http://localhost:3000/api/branches');
+      this.branches = branchesResponse.data;
+      // Dilleri yükle
+      const languagesResponse = await axios.get('http://localhost:3000/api/languages');
+      this.languages = languagesResponse.data;
+    } catch (error) {
+      console.error('Veri yüklenirken hata:', error);
+      ElMessage.error('Veriler yüklenirken bir hata oluştu');
     }
   },
   methods: {
     async handleRegister() {
       try {
+        this.loading = true;
         const response = await axios.post('http://localhost:3000/api/users/register', this.formData);
         if (response.data.success) {
-          this.message = {
-            type: 'success',
-            text: 'Kayıt başarılı! Giriş sayfasına yönlendiriliyorsunuz...'
-          };
+          ElMessage.success('Kayıt başarılı! Giriş sayfasına yönlendiriliyorsunuz...');
           setTimeout(() => {
             this.$router.push('/login');
           }, 2000);
@@ -120,10 +177,9 @@ export default {
         if (error.response) {
           errorMessage = error.response.data.error || errorMessage;
         }
-        this.message = {
-          type: 'error',
-          text: errorMessage
-        };
+        ElMessage.error(errorMessage);
+      } finally {
+        this.loading = false;
       }
     },
     goToHome() {
@@ -132,6 +188,7 @@ export default {
   }
 }
 </script>
+
 <style scoped>
 .register-container {
   min-height: 100vh;
@@ -218,8 +275,13 @@ input:focus, select:focus {
   margin-top: 1rem;
 }
 
-.register-btn:hover {
+.register-btn:hover:not(:disabled) {
   background-color: #1976D2;
+}
+
+.register-btn:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
 }
 
 .login-link {
@@ -254,5 +316,23 @@ input:focus, select:focus {
   background-color: #f2dede;
   color: #a94442;
   border: 1px solid #ebccd1;
+}
+
+.checkbox-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+select[multiple] {
+  height: 120px;
 }
 </style> 

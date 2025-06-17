@@ -6,13 +6,12 @@ const { verifyToken, checkRole } = require('../middleware/auth');
 // Tüm sınıfları getir
 router.get('/', async (req, res) => {
     try {
-        const [results] = await db.query(`
-            SELECT c.*, 
-                   b.name as branch_name
+        const [classrooms] = await db.pool.query(`
+            SELECT c.*, b.name as branch_name 
             FROM classrooms c
             LEFT JOIN branches b ON c.branch_id = b.id
         `);
-        res.json(results);
+        res.json(classrooms);
     } catch (error) {
         console.error('Error fetching classrooms:', error);
         res.status(500).json({ error: 'Sunucu hatası' });
@@ -22,28 +21,20 @@ router.get('/', async (req, res) => {
 // Sınıf detaylarını getir
 router.get('/:id', async (req, res) => {
     try {
-        const classroomId = parseInt(req.params.id);
-        if (isNaN(classroomId)) {
-            return res.status(400).json({ error: 'Geçersiz sınıf ID' });
-        }
-        
-        const query = `
-            SELECT c.*, 
-                   b.name as branch_name
+        const [classrooms] = await db.pool.query(`
+            SELECT c.*, b.name as branch_name 
             FROM classrooms c
             LEFT JOIN branches b ON c.branch_id = b.id
             WHERE c.id = ?
-        `;
-        
-        const [results] = await db.query(query, [classroomId]);
-        
-        if (results.length === 0) {
+        `, [req.params.id]);
+
+        if (classrooms.length === 0) {
             return res.status(404).json({ error: 'Sınıf bulunamadı' });
         }
-        
-        res.json(results[0]);
+
+        res.json(classrooms[0]);
     } catch (error) {
-        console.error('Error fetching classroom details:', error);
+        console.error('Error fetching classroom:', error);
         res.status(500).json({ error: 'Sunucu hatası' });
     }
 });
@@ -51,24 +42,25 @@ router.get('/:id', async (req, res) => {
 // Yeni sınıf ekle (sadece admin)
 router.post('/', verifyToken, checkRole(['admin']), async (req, res) => {
     try {
-        const { name, capacity, branch_id } = req.body;
+        const { name, capacity, branch_id, status } = req.body;
         
-        if (!name || !capacity || !branch_id) {
-            return res.status(400).json({ error: 'Tüm alanlar zorunludur' });
+        if (!name || !branch_id || !capacity) {
+            return res.status(400).json({ error: 'Sınıf adı, kapasite ve şube ID zorunludur' });
         }
 
-        const [result] = await db.query(
-            'INSERT INTO classrooms (name, capacity, branch_id) VALUES (?, ?, ?)', 
-            [name, capacity, branch_id]
+        const [result] = await db.pool.query(
+            'INSERT INTO classrooms (name, capacity, branch_id, status) VALUES (?, ?, ?, ?)', 
+            [name, capacity, branch_id, status || 'active']
         );
-        
-        res.status(201).json({ 
-            id: result.insertId, 
-            name, 
-            capacity, 
-            branch_id,
-            message: 'Sınıf başarıyla eklendi'
-        });
+
+        const [classroomResults] = await db.pool.query(`
+            SELECT c.*, b.name as branch_name 
+            FROM classrooms c
+            LEFT JOIN branches b ON c.branch_id = b.id
+            WHERE c.id = ?
+        `, [result.insertId]);
+
+        res.status(201).json(classroomResults[0]);
     } catch (error) {
         console.error('Error creating classroom:', error);
         res.status(500).json({ error: 'Sunucu hatası' });
@@ -78,29 +70,30 @@ router.post('/', verifyToken, checkRole(['admin']), async (req, res) => {
 // Sınıf güncelle (sadece admin)
 router.put('/:id', verifyToken, checkRole(['admin']), async (req, res) => {
     try {
-        const classroomId = parseInt(req.params.id);
-        if (isNaN(classroomId)) {
-            return res.status(400).json({ error: 'Geçersiz sınıf ID' });
+        const classroomId = req.params.id;
+        const { name, capacity, branch_id, status } = req.body;
+
+        if (!name || !branch_id || !capacity) {
+            return res.status(400).json({ error: 'Sınıf adı, kapasite ve şube ID zorunludur' });
         }
 
-        const { name, capacity, branch_id } = req.body;
-        
-        if (!name || !capacity || !branch_id) {
-            return res.status(400).json({ error: 'Tüm alanlar zorunludur' });
-        }
-
-        await db.query(
-            'UPDATE classrooms SET name = ?, capacity = ?, branch_id = ? WHERE id = ?', 
-            [name, capacity, branch_id, classroomId]
+        await db.pool.query(
+            'UPDATE classrooms SET name = ?, capacity = ?, branch_id = ?, status = ? WHERE id = ?', 
+            [name, capacity, branch_id, status, classroomId]
         );
-        
-        res.json({ 
-            id: classroomId, 
-            name, 
-            capacity, 
-            branch_id,
-            message: 'Sınıf başarıyla güncellendi'
-        });
+
+        const [results] = await db.pool.query(`
+            SELECT c.*, b.name as branch_name 
+            FROM classrooms c
+            LEFT JOIN branches b ON c.branch_id = b.id
+            WHERE c.id = ?
+        `, [classroomId]);
+
+        if (results.length === 0) {
+            return res.status(404).json({ error: 'Sınıf bulunamadı' });
+        }
+
+        res.json(results[0]);
     } catch (error) {
         console.error('Error updating classroom:', error);
         res.status(500).json({ error: 'Sunucu hatası' });
@@ -110,12 +103,24 @@ router.put('/:id', verifyToken, checkRole(['admin']), async (req, res) => {
 // Sınıf sil (sadece admin)
 router.delete('/:id', verifyToken, checkRole(['admin']), async (req, res) => {
     try {
-        const classroomId = parseInt(req.params.id);
-        if (isNaN(classroomId)) {
-            return res.status(400).json({ error: 'Geçersiz sınıf ID' });
+        const classroomId = req.params.id;
+        
+        // Önce sınıfın aktif kursları var mı kontrol et
+        const [activeCourses] = await db.pool.query(
+            'SELECT COUNT(*) as count FROM courses WHERE classroom_id = ? AND status = "active"',
+            [classroomId]
+        );
+
+        if (activeCourses[0].count > 0) {
+            return res.status(400).json({ error: 'Bu sınıfa ait aktif kurslar var. Önce kursları iptal edin veya tamamlayın.' });
         }
 
-        await db.query('DELETE FROM classrooms WHERE id = ?', [classroomId]);
+        const [results] = await db.pool.query('DELETE FROM classrooms WHERE id = ?', [classroomId]);
+        
+        if (results.affectedRows === 0) {
+            return res.status(404).json({ error: 'Sınıf bulunamadı' });
+        }
+
         res.json({ message: 'Sınıf başarıyla silindi' });
     } catch (error) {
         console.error('Error deleting classroom:', error);
@@ -123,5 +128,18 @@ router.delete('/:id', verifyToken, checkRole(['admin']), async (req, res) => {
     }
 });
 
-// Eksik export
+// Şubeye göre sınıfları getir
+router.get('/by-branch/:branchId', async (req, res) => {
+  const { branchId } = req.params;
+  try {
+    const [classrooms] = await db.pool.query(
+      'SELECT * FROM classrooms WHERE branch_id = ?',
+      [branchId]
+    );
+    res.json(classrooms);
+  } catch (error) {
+    res.status(500).json({ message: 'Sınıflar getirilirken hata oluştu', error: error.message });
+  }
+});
+
 module.exports = router;

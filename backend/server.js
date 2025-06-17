@@ -2,38 +2,57 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const dotenv = require('dotenv');
+const db = require('./config/db');
+const path = require('path');
 
 // Load environment variables
 dotenv.config();
 
 // Import routes
 const userRoutes = require('./routes/userRoutes');
-const classroomRoutes = require('./routes/classroomRoutes');
+const studentRoutes = require('./routes/studentRoutes');
 const teacherRoutes = require('./routes/teacherRoutes');
 const courseRoutes = require('./routes/courseRoutes');
-const infoRoutes = require('./routes/infoRoutes');
+const classroomRoutes = require('./routes/classroomRoutes');
 const branchRoutes = require('./routes/branchRoutes');
-const postRoutes = require('./routes/postRoutes');
+const pageRoutes = require('./routes/pageRoutes');
 const aboutRoutes = require('./routes/aboutRoutes');
-const studentRoutes = require('./routes/studentRoutes');
+const announcementRoutes = require('./routes/announcementRoutes');
+const contactInfoRoutes = require('./routes/contactInfoRoutes');
+const languageRoutes = require('./routes/languageRoutes');
 
 const app = express();
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Statik dosyalar için public klasörünü kullan
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 // Routes
-app.use('/api/users', userRoutes); // Kullanıcı route'ları
-app.use('/api/classrooms', classroomRoutes); // Sınıf route'ları
-app.use('/api/teachers', teacherRoutes); // Öğretmen route'ları
-app.use('/api/courses', courseRoutes); // Kurs route'ları
-app.use('/api/info', infoRoutes); // Bilgi route'ları
-app.use('/api/branches', branchRoutes); // Branş route'ları
-app.use('/api/posts', postRoutes); // Yeni eklenen post route'ları
-app.use('/api/about', aboutRoutes); // Yeni eklenen about route'ları
-app.use('/api/students', studentRoutes); // Yeni eklenen student route'ları
+app.use('/api/users', userRoutes);
+app.use('/api/students', studentRoutes);
+app.use('/api/teachers', teacherRoutes);
+app.use('/api/courses', courseRoutes);
+app.use('/api/classrooms', classroomRoutes);
+app.use('/api/branches', branchRoutes);
+app.use('/api/pages', pageRoutes);
+app.use('/api/about', aboutRoutes);
+app.use('/api/announcements', announcementRoutes);
+app.use('/api/contact-info', contactInfoRoutes);
+app.use('/api/languages', languageRoutes);
+
+// Veritabanı bağlantısını test et
+db.pool.getConnection((err, connection) => {
+    if (err) {
+        console.error('Veritabanı bağlantı hatası:', err);
+        return;
+    }
+    console.log('Veritabanına başarıyla bağlandı!');
+    connection.release();
+});
 
 // Error handling middleware
 app.use((err, req, res, next) => {

@@ -8,7 +8,7 @@
           <button @click="goToRegister" class="register-btn">Kayıt Ol</button>
         </div>
       </div>
-      <form @submit.prevent="handleLogin" class="login-form">
+      <form @submit="handleLogin" class="login-form">
         <div class="form-group">
           <label for="email">E-posta</label>
           <input 
@@ -31,7 +31,14 @@
           >
         </div>
 
-        <button type="submit" class="login-btn">Giriş Yap</button>
+        <!-- Hata mesajı gösterimi -->
+        <div v-if="errorMessage" class="error-message">
+          {{ errorMessage }}
+        </div>
+
+        <button type="submit" class="login-btn" :disabled="isLoading">
+          {{ isLoading ? 'Giriş Yapılıyor...' : 'Giriş Yap' }}
+        </button>
       </form>
 
       <div class="register-link">
@@ -51,44 +58,81 @@ export default {
       formData: {
         email: '',
         password: ''
-      }
+      },
+      errorMessage: '',
+      isLoading: false
     }
   },
   methods: {
-    async handleLogin() {
-  try {
-    const response = await axios.post('http://localhost:3000/api/users/login', this.formData);
-
-    if (response.data.token) {
-      // Token'ı ve kullanıcıyı localStorage'a kaydediyoruz
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-
-      // Kullanıcının rolüne göre yönlendirme
-      const userRole = response.data.user.role;
-
-      // Rolü kontrol ederek yönlendirme
-      if (userRole === 'student') {
-        this.$router.push('/student');
-      } else if (userRole === 'teacher') {
-        this.$router.push('/teacher');
-      } else if (userRole === 'admin') {
-        this.$router.push('/admin');
-      } else if (userRole === 'superadmin') {
-        this.$router.push('/superadmin');
-      } else {
-        // Eğer rol tanımlı değilse, anasayfaya yönlendir
-        this.$router.push('/');
+    async handleLogin(e) {
+      e.preventDefault();
+      
+      if (!this.formData.email || !this.formData.password) {
+        this.errorMessage = 'Email ve şifre gereklidir';
+        return;
       }
-    }
-  } catch (error) {
-    console.error('Giriş hatası:', error);
-  } 
-},
-goToHome() {
+
+      this.isLoading = true;
+      this.errorMessage = '';
+
+      try {
+        console.log('Sending login request...', { 
+          email: this.formData.email,
+          password: '***'
+        });
+
+        const response = await axios.post('http://localhost:3000/api/users/login', {
+          email: this.formData.email,
+          password: this.formData.password
+        });
+
+        console.log('Login response:', response.data);
+
+        if (response.data.token) {
+          localStorage.setItem('token', response.data.token);
+          localStorage.setItem('user', JSON.stringify(response.data.user));
+
+          const userRole = response.data.user.role;
+          console.log('User role:', userRole);
+
+          // Rol bazlı yönlendirme
+          const roleRoutes = {
+            student: '/student',
+            teacher: '/teacher',
+            admin: '/admin',
+            superadmin: '/superadmin'
+          };
+
+          const targetRoute = roleRoutes[userRole] || '/';
+          console.log('Redirecting to:', targetRoute);
+          
+          await this.$router.push(targetRoute);
+        }
+      } catch (error) {
+        console.error('Login error:', error);
+        if (error.response) {
+          // Backend'den gelen hata
+          console.error('Error response:', error.response.data);
+          this.errorMessage = error.response.data.error || 'Giriş yapılırken bir hata oluştu';
+        } else if (error.request) {
+          // İstek yapıldı ama cevap alınamadı
+          console.error('No response received:', error.request);
+          this.errorMessage = 'Sunucuya bağlanılamıyor. Lütfen internet bağlantınızı kontrol edin.';
+        } else {
+          // İstek oluşturulurken hata oluştu
+          console.error('Request error:', error.message);
+          this.errorMessage = 'Bir hata oluştu';
+        }
+      } finally {
+        this.isLoading = false;
+      }
+    },
+    goToHome(e) {
+      e.preventDefault();
       this.$router.push('/');
     },
-    goToRegister() {
+    goToRegister(e) {
+      e.preventDefault();
       this.$router.push('/register');
     }
   }
@@ -214,5 +258,22 @@ input:focus {
 
 .register-link a:hover {
   text-decoration: underline;
+}
+
+/* Hata mesajı için yeni stil */
+.error-message {
+  color: #dc3545;
+  background-color: #f8d7da;
+  border: 1px solid #f5c6cb;
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+/* Loading durumu için stil */
+.login-btn:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
 }
 </style> 

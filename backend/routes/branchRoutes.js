@@ -2,119 +2,152 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/db');
 const { verifyToken, checkRole } = require('../middleware/auth');
+const branchController = require('../controllers/branchController');
+const { geocodeAddress } = require('../utils/geocoding');
+const upload = require('../middleware/upload');
 
 // Tüm şubeleri getir
-router.get('/', async (req, res) => {
-    try {
-        const [results] = await db.query(`
-            SELECT * FROM branches
-            ORDER BY name
-        `);
-        res.json(results);
-    } catch (error) {
-        console.error('Error fetching branches:', error);
-        res.status(500).json({ error: 'Sunucu hatası' });
-    }
-});
+router.get('/', branchController.getAllBranches);
 
 // Tek bir şube getir
 router.get('/:id', async (req, res) => {
     try {
-        const branchId = parseInt(req.params.id);
-        if (isNaN(branchId)) {
-            return res.status(400).json({ error: 'Geçersiz şube ID' });
-        }
-
-        const [results] = await db.query(
-            'SELECT * FROM branches WHERE id = ?', 
-            [branchId]
-        );
-
-        if (results.length === 0) {
+        const [branches] = await db.pool.query('SELECT * FROM branches WHERE id = ?', [req.params.id]);
+        
+        if (branches.length === 0) {
             return res.status(404).json({ error: 'Şube bulunamadı' });
         }
 
-        res.json(results[0]);
+        res.json(branches[0]);
     } catch (error) {
-        console.error('Error fetching branch details:', error);
+        console.error('Error fetching branch:', error);
         res.status(500).json({ error: 'Sunucu hatası' });
     }
 });
 
-// Yeni şube ekle (sadece admin)
+// Yeni şube ekle
 router.post('/', verifyToken, checkRole(['admin']), async (req, res) => {
     try {
-        const { name, location, description } = req.body;
-        
-        if (!name || !location) {
-            return res.status(400).json({ error: 'Name ve location zorunludur' });
+        const { name, address, phone, email, transportation, social_facilities } = req.body;
+
+        if (!name) {
+            return res.status(400).json({ error: 'Şube adı zorunludur' });
         }
 
-        const [result] = await db.query(
-            'INSERT INTO branches (name, location, description) VALUES (?, ?, ?)', 
-            [name, location, description || '']
+        // Adres varsa koordinatları al
+        let latitude = null;
+        let longitude = null;
+        let formattedAddress = address;
+
+        if (address) {
+            try {
+                const geocodeResult = await geocodeAddress(address);
+                latitude = geocodeResult.latitude;
+                longitude = geocodeResult.longitude;
+                formattedAddress = geocodeResult.formatted_address;
+            } catch (error) {
+                console.error('Geocoding error:', error);
+                // Geocoding hatası durumunda işleme devam et
+            }
+        }
+
+        const [result] = await db.pool.query(
+            'INSERT INTO branches (name, address, phone, email, latitude, longitude, transportation, social_facilities) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [name, formattedAddress, phone || null, email || null, latitude, longitude, transportation || null, social_facilities || null]
         );
 
-        res.status(201).json({ 
-            id: result.insertId, 
-            name, 
-            location, 
-            description,
-            message: 'Şube başarıyla eklendi'
-        });
+        const [newBranch] = await db.pool.query('SELECT * FROM branches WHERE id = ?', [result.insertId]);
+        res.status(201).json(newBranch[0]);
     } catch (error) {
         console.error('Error creating branch:', error);
-        res.status(500).json({ error: 'Sunucu hatası' });
+        res.status(500).json({ error: 'Sunucu hatası: ' + error.message });
     }
 });
 
-// Şube güncelle (sadece admin)
+// Şube güncelle
 router.put('/:id', verifyToken, checkRole(['admin']), async (req, res) => {
     try {
-        const branchId = parseInt(req.params.id);
-        if (isNaN(branchId)) {
-            return res.status(400).json({ error: 'Geçersiz şube ID' });
+        const { name, address, phone, email, transportation, social_facilities } = req.body;
+        const branchId = req.params.id;
+
+        if (!name) {
+            return res.status(400).json({ error: 'Şube adı zorunludur' });
         }
 
-        const { name, location, description } = req.body;
-        
-        if (!name || !location) {
-            return res.status(400).json({ error: 'Name ve location zorunludur' });
+        // Adres varsa koordinatları al
+        let latitude = null;
+        let longitude = null;
+        let formattedAddress = address;
+
+        if (address) {
+            try {
+                const geocodeResult = await geocodeAddress(address);
+                latitude = geocodeResult.latitude;
+                longitude = geocodeResult.longitude;
+                formattedAddress = geocodeResult.formatted_address;
+            } catch (error) {
+                console.error('Geocoding error:', error);
+                // Geocoding hatası durumunda işleme devam et
+            }
         }
 
-        await db.query(
-            'UPDATE branches SET name = ?, location = ?, description = ? WHERE id = ?', 
-            [name, location, description || '', branchId]
+        await db.pool.query(
+            'UPDATE branches SET name = ?, address = ?, phone = ?, email = ?, latitude = ?, longitude = ?, transportation = ?, social_facilities = ? WHERE id = ?',
+            [name, formattedAddress, phone || null, email || null, latitude, longitude, transportation || null, social_facilities || null, branchId]
         );
 
-        res.json({ 
-            id: branchId, 
-            name, 
-            location, 
-            description,
-            message: 'Şube başarıyla güncellendi'
-        });
+        const [updatedBranch] = await db.pool.query('SELECT * FROM branches WHERE id = ?', [branchId]);
+        res.json(updatedBranch[0]);
     } catch (error) {
         console.error('Error updating branch:', error);
-        res.status(500).json({ error: 'Sunucu hatası' });
+        res.status(500).json({ error: 'Sunucu hatası: ' + error.message });
     }
 });
 
-// Şube sil (sadece admin)
-router.delete('/:id', verifyToken, checkRole(['admin']), async (req, res) => {
+// Şube sil
+router.delete('/:id', verifyToken, checkRole(['admin']), branchController.deleteBranch);
+
+// En yakın şubeyi bul
+router.post('/nearest', verifyToken, branchController.findNearestBranch);
+
+// Şubenin kurslarını getir
+router.get('/:branchId/courses', verifyToken, branchController.getBranchCourses);
+
+// Şube resmi yükle
+router.post('/:id/image', verifyToken, checkRole(['admin']), upload.single('image'), async (req, res) => {
     try {
-        const branchId = parseInt(req.params.id);
-        if (isNaN(branchId)) {
-            return res.status(400).json({ error: 'Geçersiz şube ID' });
+        const branchId = req.params.id;
+        if (!req.file) {
+            return res.status(400).json({ error: 'Resim yüklenmedi' });
         }
+        const imagePath = `/uploads/${req.file.filename}`;
 
-        await db.query('DELETE FROM branches WHERE id = ?', [branchId]);
-        res.json({ message: 'Şube başarıyla silindi' });
+        // Sadece o şubeyi güncelle
+        await db.pool.query(
+            'UPDATE branches SET image_path = ? WHERE id = ?',
+            [imagePath, branchId]
+        );
+
+        // Sadece güncellenen şubeyi döndür
+        const [updatedBranch] = await db.pool.query('SELECT * FROM branches WHERE id = ?', [branchId]);
+        res.json(updatedBranch[0]);
     } catch (error) {
-        console.error('Error deleting branch:', error);
-        res.status(500).json({ error: 'Sunucu hatası' });
+        res.status(500).json({ error: error.message });
     }
 });
 
-// Eksik export
+// Geçici şube resmi yükleme endpointi
+router.post('/temp/image', verifyToken, checkRole(['admin']), upload.single('image'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'Resim yüklenmedi' });
+        }
+        const imagePath = `/uploads/${req.file.filename}`;
+        res.json({ image_path: imagePath });
+    } catch (error) {
+        console.error('Error uploading temporary branch image:', error);
+        res.status(500).json({ error: 'Sunucu hatası: ' + error.message });
+    }
+});
+
 module.exports = router;

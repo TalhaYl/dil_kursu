@@ -21,286 +21,816 @@
 
     <section id="announcements" class="section">
       <h2>Duyurular</h2>
-      <p>Burada en son duyurularımızı bulabilirsiniz.</p>
+      <div v-if="announcements.length > 0" class="announcements-list">
+        <div v-for="announcement in announcements" :key="announcement.id" class="announcement-card">
+          <h3>{{ announcement.title }}</h3>
+          <p>{{ announcement.content }}</p>
+          <div class="announcement-date">{{ formatDate(announcement.created_at) }}</div>
+        </div>
+      </div>
+      <p v-else>Henüz duyuru bulunmuyor.</p>
     </section>
 
     <section id="courses" class="section">
       <h2>Kurslar</h2>
-      <div class="course-list">
+      <div v-if="courses.length > 0" class="course-list">
         <div v-for="course in courses" :key="course.id" class="course-card">
-          <img :src="course.image" alt="course.name" class="course-image" />
-          <h3>{{ course.name }}</h3>
-          <p><strong>Dil:</strong> {{ course.language }}</p>
-          <p><strong>Seviye:</strong> {{ course.level }}</p>
-          <p><strong>Başlangıç Tarihi:</strong> {{ course.startDate }}</p>
-          <p><strong>Bitiş Tarihi:</strong> {{ course.endDate }}</p>
-          <p><strong>Günler ve Saatler:</strong> {{ course.schedule }}</p>
-          <p><strong>Toplam Süre:</strong> {{ course.totalDuration }}</p>
-          <p><strong>Şube ve Sınıf:</strong> {{ course.branch }} - {{ course.room }}</p>
+          <img :src="getImageUrl(course.image_path)" :alt="course.name" class="course-image" />
+          <div class="course-content">
+            <h3>{{ course.name }}</h3>
+            <div class="course-info">
+              <div class="course-info-item">
+                <i class="fas fa-language"></i>
+                <span>{{ course.language }}</span>
+              </div>
+              <div class="course-info-item" v-if="course.level">
+                <i class="fas fa-level-up-alt"></i>
+                <span>{{ course.level }}</span>
+              </div>
+              <div class="course-info-item" v-if="course.teacher_name">
+                <i class="fas fa-user-tie"></i>
+                <span>{{ course.teacher_name }}</span>
+              </div>
+              <div class="course-info-item">
+                <i class="fas fa-calendar-alt"></i>
+                <span>{{ formatDate(course.start_date) }} - {{ formatDate(course.end_date) }}</span>
+              </div>
+              <div class="course-info-item">
+                <i class="fas fa-clock"></i>
+                <span>{{ formatSchedule(course.schedule) }}</span>
+              </div>
+              <div class="course-info-item">
+                <i class="fas fa-map-marker-alt"></i>
+                <span>{{ getBranchName(course.branch_id) }} - {{ getClassroomName(course.classroom_id) }}</span>
+              </div>
+              <div class="course-info-item" v-if="course.max_students">
+                <i class="fas fa-users"></i>
+                <span>Max {{ course.max_students }} Öğrenci</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+      <p v-else>Henüz kurs bulunmuyor.</p>
     </section>
 
     <section id="branches" class="section">
       <h2>Şubeler</h2>
-      <div class="branch-list">
+      <div v-if="branches.length > 0" class="branch-container">
         <div v-for="branch in branches" :key="branch.id" class="branch-card">
-          <img :src="branch.image" alt="branch.name" class="branch-image" />
-          <h3>{{ branch.name }}</h3>
-          <p><strong>Adres:</strong> {{ branch.address }}</p>
-          <p><strong>Derslik Sayısı:</strong> {{ branch.classrooms }}</p>
-          <p><strong>Toplam Kapasite:</strong> {{ branch.capacity }}</p>
-          <p><strong>Ulaşım Bilgileri:</strong> {{ branch.transportation }}</p>
-          <p><strong>Sosyal Olanaklar:</strong> {{ branch.socialFacilities }}</p>
+          <img :src="getImageUrl(branch.image_path)" alt="branch.name" class="branch-image" />
+          <div class="branch-content">
+            <h3>{{ branch.name }}</h3>
+            
+            <!-- Temel Bilgiler -->
+            <div class="info-section">
+              <div class="info-item">
+                <i class="fas fa-map-marker-alt"></i>
+                <span>{{ branch.address }}</span>
+              </div>
+              <div class="info-item">
+                <i class="fas fa-phone"></i>
+                <span>{{ branch.phone }}</span>
+              </div>
+              <div class="info-item">
+                <i class="fas fa-envelope"></i>
+                <span>{{ branch.email }}</span>
+              </div>
+            </div>
+
+            <!-- Ulaşım Bilgileri -->
+            <div class="info-section" v-if="branch.transportation">
+              <h4><i class="fas fa-bus"></i> Ulaşım Bilgileri</h4>
+              <div class="info-item">
+                <span>{{ branch.transportation }}</span>
+              </div>
+            </div>
+
+            <!-- Sosyal İmkanlar -->
+            <div class="info-section" v-if="branch.social_facilities">
+              <h4><i class="fas fa-coffee"></i> Sosyal Olanaklar</h4>
+              <div class="info-item">
+                <span>{{ branch.social_facilities }}</span>
+              </div>
+            </div>
+
+            <!-- İstatistikler -->
+            <div class="stats-section">
+              <div class="stat-item">
+                <span class="stat-number">{{ branch.classroom_count }}</span>
+                <span class="stat-label">Derslik</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-number">{{ branch.capacity }}</span>
+                <span class="stat-label">Toplam Kapasite</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+      <p v-else>Henüz şube bulunmuyor.</p>
     </section>
 
     <section id="about" class="section">
       <h2>Hakkımızda</h2>
-      <p>Şirketimizin misyonu ve vizyonu hakkında bilgi burada.</p>
+      <div v-if="aboutData" class="about-content">
+        <h3>{{ aboutData.title }}</h3>
+        <p>{{ aboutData.content }}</p>
+      </div>
+      <p v-else>Hakkımızda bilgisi bulunmuyor.</p>
     </section>
 
     <section id="contact" class="section">
       <h2>İletişim</h2>
-      <p>Bize ulaşmak için iletişim bilgilerimiz burada yer almakta.</p>
+      <div v-if="contactInfo.length > 0" class="contact-list">
+        <div v-for="contact in contactInfo" :key="contact.id" class="contact-card">
+          <h3>{{ contact.branch_id ? getBranchName(contact.branch_id) : 'Merkez' }}</h3>
+          <div class="contact-details">
+            <p><i class="fas fa-map-marker-alt"></i> {{ contact.address }}</p>
+            <p><i class="fas fa-phone"></i> {{ contact.phone }}</p>
+            <p><i class="fas fa-envelope"></i> {{ contact.email }}</p>
+            <p><i class="fas fa-clock"></i> {{ contact.working_hours }}</p>
+          </div>
+          <div v-if="contact.map_embed" class="map-container" v-html="contact.map_embed"></div>
+          <div v-if="contact.social_media" class="social-media">
+            <a v-for="(url, platform) in JSON.parse(contact.social_media)" 
+               :key="platform" 
+               :href="url" 
+               target="_blank"
+               class="social-link">
+              <i :class="getSocialIcon(platform)"></i>
+            </a>
+          </div>
+        </div>
+      </div>
+      <p v-else>İletişim bilgisi bulunmuyor.</p>
     </section>
   </div>
 </template>
 
 <script>
+import { ref, onMounted } from 'vue'
+import axios from 'axios'
+
 export default {
   name: "HomePage",
+  setup() {
+    const announcements = ref([])
+    const courses = ref([])
+    const branches = ref([])
+    const aboutData = ref(null)
+    const contactInfo = ref([])
+    const classrooms = ref([])
+
+    const fetchAnnouncements = async () => {
+      try {
+        const response = await axios.get('/api/announcements')
+        announcements.value = response.data
+      } catch (error) {
+        console.error('Error fetching announcements:', error)
+      }
+    }
+
+    const fetchCourses = async () => {
+      try {
+        const response = await axios.get('/api/courses')
+        courses.value = response.data
+      } catch (error) {
+        console.error('Error fetching courses:', error)
+      }
+    }
+
+    const fetchBranches = async () => {
+      try {
+        const response = await axios.get('/api/branches')
+        branches.value = response.data
+        console.log('Fetched branches:', branches.value)
+      } catch (error) {
+        console.error('Error fetching branches:', error)
+      }
+    }
+
+    const fetchAbout = async () => {
+      try {
+        const response = await axios.get('/api/about')
+        aboutData.value = response.data
+      } catch (error) {
+        console.error('Error fetching about data:', error)
+      }
+    }
+
+    const fetchContactInfo = async () => {
+      try {
+        const response = await axios.get('/api/contact-info')
+        contactInfo.value = response.data
+      } catch (error) {
+        console.error('Error fetching contact info:', error)
+      }
+    }
+
+    const fetchClassrooms = async () => {
+      try {
+        const response = await axios.get('/api/classrooms')
+        classrooms.value = response.data
+      } catch (error) {
+        console.error('Error fetching classrooms:', error)
+      }
+    }
+
+    const getBranchName = (branchId) => {
+      const branch = branches.value.find(b => b.id === branchId)
+      return branch ? branch.name : 'Bilinmeyen Şube'
+    }
+
+    const getClassroomName = (classroomId) => {
+      const classroom = classrooms.value.find(c => c.id === classroomId)
+      return classroom ? classroom.name : 'Bilinmeyen Sınıf'
+    }
+
+    const getSocialIcon = (platform) => {
+      const icons = {
+        facebook: 'fab fa-facebook',
+        twitter: 'fab fa-twitter',
+        instagram: 'fab fa-instagram',
+        linkedin: 'fab fa-linkedin'
+      }
+      return icons[platform] || 'fas fa-link'
+    }
+
+    const formatDate = (dateString) => {
+      if (!dateString) return ''
+      const date = new Date(dateString)
+      return date.toLocaleDateString('tr-TR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      })
+    }
+
+    const formatSchedule = (schedule) => {
+      if (!schedule) return 'Program belirtilmemiş'
+      
+      try {
+        const scheduleObj = typeof schedule === 'string' ? JSON.parse(schedule) : schedule
+        const dayNames = {
+          'Pazartesi': 'Pzt',
+          'Salı': 'Sal',
+          'Çarşamba': 'Çar',
+          'Perşembe': 'Per',
+          'Cuma': 'Cum',
+          'Cumartesi': 'Cmt',
+          'Pazar': 'Paz'
+        }
+        
+        const activeDays = Object.entries(scheduleObj)
+          .filter(([, times]) => times && times.start && times.end)
+          .map(([day, times]) => `${dayNames[day] || day}: ${times.start}-${times.end}`)
+        
+        return activeDays.length > 0 ? activeDays.join(', ') : 'Program belirtilmemiş'
+      } catch (error) {
+        console.error('Error parsing schedule:', error)
+        return 'Program belirtilmemiş'
+      }
+    }
+
+    const getImageUrl = (path) => {
+      if (!path) return 'https://via.placeholder.com/200x200?text=Yok';
+      if (path.startsWith('http')) return path;
+      return `http://localhost:3000${path}`;
+    };
+
+    onMounted(() => {
+      fetchAnnouncements()
+      fetchCourses()
+      fetchBranches()
+      fetchAbout()
+      fetchContactInfo()
+      fetchClassrooms()
+    })
+
+    return {
+      announcements,
+      courses,
+      branches,
+      aboutData,
+      contactInfo,
+      getBranchName,
+      getClassroomName,
+      getSocialIcon,
+      formatDate,
+      formatSchedule,
+      getImageUrl
+    }
+  },
   methods: {
-    // Giriş sayfasına yönlendir
     goToLogin() {
-      this.$router.push('/login');
+      this.$router.push('/login')
     },
     goToRegister() {
-      this.$router.push('/register');
+      this.$router.push('/register')
     },
-    // Bölüme kaydır
     scrollToSection(sectionId) {
-      const section = document.getElementById(sectionId);
+      const section = document.getElementById(sectionId)
       if (section) {
-        section.scrollIntoView({ behavior: "smooth" });
+        section.scrollIntoView({ behavior: "smooth" })
       }
-    },
-  },
-  data() {
-    return { 
-      courses: [
-        {
-          id: 1,
-          name: "İngilizce Başlangıç Seviyesi",
-          language: "İngilizce",
-          level: "Başlangıç (A1)",
-          startDate: "01 Ocak 2024",
-          endDate: "31 Mart 2024",
-          schedule: "Pazartesi ve Çarşamba 18:00-19:30",
-          totalDuration: "12 hafta",
-          branch: "Kadıköy Şubesi",
-          room: "Sınıf 101",
-          image: "https://www.britishenglish.com.tr/wp-content/uploads/2019/10/ingilizce-ogrenmek.jpg.webp",
-        },
-        {
-          id: 2,
-          name: "Fransızca Orta Seviye",
-          language: "Fransızca",
-          level: "Orta (B1)",
-          startDate: "15 Ocak 2024",
-          endDate: "15 Nisan 2024",
-          schedule: "Salı ve Perşembe 19:00-20:30",
-          totalDuration: "12 hafta",
-          branch: "Beşiktaş Şubesi",
-          room: "Sınıf 202",
-          image: "https://www.edubook.com.tr/files/Blog/french.png",
-        },
-        {
-          id: 3,
-          name: "Almanca Orta Seviye",
-          language: "Almanca",
-          level: "Orta (B1-B2)",
-          startDate: "10 Nisan 2024",
-          endDate: "26 Haziran 2024",
-          schedule: "Çarşamba ve Cumartesi 19:00-20:30",
-          totalDuration: "12 hafta",
-          branch: "Üsküdar Şubesi",
-          room: "Sınıf 102",
-          image: "https://avatars.mds.yandex.net/i?id=ec339b7c55bcd408eaf8e87e5e592e3c7456a2e3-9242682-images-thumbs&n=13",
-        },
-      ],
-      branches: [
-        {
-          id: 1,
-          name: "Kadıköy Şubesi",
-          address: "Kadıköy, İstanbul",
-          classrooms: 12,
-          capacity: 300,
-          transportation: "Kadıköy Metro İstasyonu'na 5 dakika yürüyüş mesafesinde.",
-          socialFacilities: "Kafeterya, dinlenme alanı, etüt odaları.",
-          image: "https://imageio.forbes.com/specials-images/imageserve/6616fad0b8a7964bde32cf55/0x0.jpg?format=jpg&height=900&width=1600&fit=bounds",
-        },
-        {
-          id: 2,
-          name: "Beşiktaş Şubesi",
-          address: "Beşiktaş, İstanbul",
-          classrooms: 10,
-          capacity: 250,
-          transportation: "Beşiktaş İskelesi'ne 3 dakika mesafede.",
-          socialFacilities: "Kafeterya, okuma alanı, sosyal kulüpler.",
-          image: "https://visitturkey.in/wp-content/uploads/2024/07/besiktas-istanbul-turkey-1200x900.webp",
-        },
-        {
-          id: 3,
-          name: "Şişli Şubesi",
-          address: "Şişli, İstanbul",
-          classrooms: 15,
-          capacity: 350,
-          transportation: "Şişli Metro İstasyonu'na 10 dakika yürüme mesafesinde.",
-          socialFacilities: "Kafeterya, spor salonu, sinema salonu.",
-          image: "https://istanbul.tips/wp-content/uploads/2023/03/Sisli.jpeg",
-        },
-      ],
-    };
-  },  
-};
+    }
+  }
+}
 </script>
 
 <style scoped>
 .home {
   text-align: center;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 .navbar {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   position: sticky;
   top: 0;
-  background-color: white;
-  padding: 10px 20px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  background-color: rgba(255, 255, 255, 0.95);
+  padding: 15px 30px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
   z-index: 1000;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
 }
 
 .left-links button,
 .right-links button {
   margin: 0 10px;
-  padding: 8px 15px;
+  padding: 10px 20px;
   font-size: 1rem;
-  background-color: #3498db;
+  background-color: #4a90e2;
   color: white;
   border: none;
-  border-radius: 5px;
+  border-radius: 25px;
   cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .left-links button:hover,
 .right-links button:hover {
-  background-color: #2980b9;
+  background-color: #357abd;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .content {
-  margin-top: 50px;
+  margin-top: 80px;
+  padding: 40px 20px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-radius: 15px;
+  margin: 80px 20px 40px;
 }
 
 h1 {
-  font-size: 2rem;
+  font-size: 3rem;
   color: #2c3e50;
+  margin-bottom: 20px;
+  font-weight: 700;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 p {
-  font-size: 1.2rem;
-  color: #7f8c8d;
+  font-size: 1.3rem;
+  color: #34495e;
+  line-height: 1.6;
 }
 
 .section {
-  margin: 50px auto;
-  padding: 20px;
-  max-width: 800px;
+  margin: 60px auto;
+  padding: 30px;
+  max-width: 1200px;
   text-align: left;
-  background-color: #f9f9f9;
-  border: 1px solid #ddd;
-  border-radius: 5px;
+  background-color: #ffffff;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease;
+}
+
+.section:hover {
+  transform: translateY(-5px);
 }
 
 .section h2 {
-  font-size: 1.5rem;
+  font-size: 2rem;
   color: #2c3e50;
+  margin-bottom: 30px;
+  position: relative;
+  padding-bottom: 10px;
 }
 
-.section p {
-  font-size: 1rem;
+.section h2::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 60px;
+  height: 3px;
+  background: #4a90e2;
+  border-radius: 3px;
+}
+
+.announcements-list {
+  display: grid;
+  gap: 25px;
+}
+
+.announcement-card {
+  background-color: white;
+  padding: 25px;
+  border-radius: 12px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  border: 1px solid #eef2f7;
+}
+
+.announcement-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+.announcement-card h3 {
+  color: #2c3e50;
+  margin-bottom: 15px;
+  font-size: 1.4rem;
+}
+
+.announcement-date {
   color: #7f8c8d;
+  font-size: 0.9rem;
+  margin-top: 15px;
+  font-style: italic;
 }
 
 .course-list {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 30px;
+  padding: 20px 0;
 }
 
 .course-card {
-  background-color: #fff;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  padding: 15px;
+  background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+  border: none;
+  border-radius: 20px;
+  padding: 0;
   text-align: left;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+  transition: all 0.4s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.course-card:hover {
+  transform: translateY(-8px) scale(1.01);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.12);
 }
 
 .course-image {
   width: 100%;
-  height: auto;
-  border-radius: 5px;
-  margin-bottom: 15px;
+  height: 250px;
+  object-fit: cover;
+  border-radius: 20px 20px 0 0;
+  margin-bottom: 0;
+  transition: transform 0.4s ease;
+}
+
+.course-card:hover .course-image {
+  transform: scale(1.05);
+}
+
+.course-content {
+  padding: 25px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,1) 100%);
+  border-radius: 20px;
+  margin-top: -20px;
+  position: relative;
+  z-index: 1;
 }
 
 .course-card h3 {
-  font-size: 1.2rem;
+  font-size: 1.5rem;
+  color: #1a237e;
+  margin-bottom: 15px;
+  font-weight: 600;
+  position: relative;
+  padding-bottom: 12px;
+}
+
+.course-card h3::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 40px;
+  height: 3px;
+  background: linear-gradient(90deg, #4a90e2 0%, #357abd 100%);
+  border-radius: 3px;
+}
+
+.course-info {
+  display: grid;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.course-info-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(74, 144, 226, 0.08);
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  border-left: 3px solid #4a90e2;
+}
+
+.course-info-item:hover {
+  background: rgba(74, 144, 226, 0.15);
+  transform: translateX(3px);
+}
+
+.course-info-item i {
+  color: #4a90e2;
+  font-size: 1.1rem;
+  min-width: 20px;
+  text-align: center;
+}
+
+.course-info-item span {
   color: #2c3e50;
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 .course-card p {
-  font-size: 0.9rem;
-  color: #7f8c8d;
-  margin: 5px 0;
+  font-size: 1rem;
+  color: #34495e;
+  margin: 0;
+  line-height: 1.5;
 }
 
-.branch-list {
+.branch-container {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 30px;
+  padding: 20px;
 }
 
 .branch-card {
-  background-color: #fff;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  padding: 15px;
-  text-align: left;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  background: white;
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.branch-card:hover {
+  transform: translateY(-5px);
 }
 
 .branch-image {
   width: 100%;
-  height: auto;
-  border-radius: 5px;
-  margin-bottom: 15px;
+  height: 200px;
+  object-fit: cover;
 }
 
-.branch-card h3 {
-  font-size: 1.2rem;
-  color: #2c3e50;
+.branch-content {
+  padding: 20px;
+  flex: 1;
 }
 
-.branch-card p {
+.branch-content h3 {
+  color: #1a237e;
+  margin: 0 0 20px 0;
+  font-size: 1.5rem;
+}
+
+.info-section {
+  margin-bottom: 25px;
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 10px;
+}
+
+.info-section h4 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #1a237e;
+  margin: 0 0 15px 0;
+  font-size: 1.1rem;
+}
+
+.info-section h4 i {
+  color: #4a90e2;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  margin-bottom: 8px;
+}
+
+.info-item:last-child {
+  margin-bottom: 0;
+}
+
+.info-item:hover {
+  background: rgba(74, 144, 226, 0.1);
+  transform: translateX(5px);
+}
+
+.info-item i {
+  color: #4a90e2;
+  font-size: 1.1rem;
+  min-width: 20px;
+}
+
+.info-item span {
+  color: #34495e;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.stats-section {
+  display: flex;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.stat-item {
+  flex: 1;
+  text-align: center;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 10px;
+  transition: all 0.3s ease;
+}
+
+.stat-item:hover {
+  background: rgba(74, 144, 226, 0.1);
+  transform: translateY(-3px);
+}
+
+.stat-number {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #4a90e2;
+  margin-bottom: 5px;
+}
+
+.stat-label {
   font-size: 0.9rem;
-  color: #7f8c8d;
-  margin: 5px 0;
+  color: #34495e;
 }
 
-.branch-card p strong {
+.about-content {
+  background-color: white;
+  padding: 30px;
+  border-radius: 12px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+  line-height: 1.8;
+}
+
+.about-content h3 {
   color: #2c3e50;
+  margin-bottom: 20px;
+  font-size: 1.6rem;
+}
+
+.contact-list {
+  display: grid;
+  gap: 30px;
+}
+
+.contact-card {
+  background-color: white;
+  padding: 30px;
+  border-radius: 12px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+}
+
+.contact-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.contact-card h3 {
+  color: #2c3e50;
+  margin-bottom: 20px;
+  font-size: 1.4rem;
+}
+
+.contact-details {
+  display: grid;
+  gap: 15px;
+}
+
+.contact-details p {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.contact-details i {
+  color: #4a90e2;
+  width: 24px;
+  font-size: 1.2rem;
+}
+
+.map-container {
+  margin-top: 25px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.map-container iframe {
+  width: 100%;
+  height: 350px;
+  border: none;
+  border-radius: 8px;
+}
+
+.social-media {
+  display: flex;
+  gap: 20px;
+  margin-top: 20px;
+  justify-content: center;
+}
+
+.social-link {
+  color: #666;
+  font-size: 24px;
+  transition: all 0.3s ease;
+  padding: 10px;
+  border-radius: 50%;
+  background-color: #f8f9fa;
+}
+
+.social-link:hover {
+  color: #4a90e2;
+  transform: translateY(-3px);
+  background-color: #eef2f7;
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    flex-direction: column;
+    padding: 15px;
+  }
+
+  .left-links, .right-links {
+    margin: 10px 0;
+  }
+
+  .content {
+    margin: 60px 10px 30px;
+    padding: 20px;
+  }
+
+  h1 {
+    font-size: 2rem;
+  }
+
+  .section {
+    padding: 20px;
+    margin: 30px 10px;
+  }
+
+  .course-list, .branch-container {
+    grid-template-columns: 1fr;
+    padding: 10px;
+  }
+
+  .course-image, .branch-image {
+    height: 200px;
+  }
+
+  .course-content, .branch-content {
+    padding: 20px;
+  }
+
+  .stats-section {
+    flex-direction: row;
+  }
 }
 </style>

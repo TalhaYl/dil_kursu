@@ -1,47 +1,58 @@
 <template>
   <div class="about-management">
-    <h2>Hakkımızda Sayfası Yönetimi</h2>
-    <form @submit.prevent="handleSubmit" class="about-form">
-      <div class="form-group">
-        <label for="title">Başlık</label>
-        <input
-          type="text"
-          id="title"
-          v-model="formData.title"
-          required
-        >
+    <div class="page-header">
+      <h2>Hakkımızda Sayfası Yönetimi</h2>
+      <div class="header-actions">
+        <button class="add-btn" @click="addAbout">
+          <i class="fas fa-plus"></i> Yeni Ekle
+        </button>
+        <button class="edit-btn" @click="editAbout" :disabled="!aboutData">
+          <i class="fas fa-edit"></i> Düzenle
+        </button>
+        <button class="delete-btn" @click="deleteAbout" :disabled="!aboutData">
+          <i class="fas fa-trash"></i> Sil
+        </button>
       </div>
-      <div class="form-group">
-        <label for="content">İçerik</label>
-        <textarea
-          id="content"
-          v-model="formData.content"
-          rows="10"
-          required
-        ></textarea>
+    </div>
+
+    <div class="about-content" v-if="aboutData">
+      <h3>{{ aboutData.title }}</h3>
+      <div class="content-section">
+        <h4>İçerik</h4>
+        <p>{{ aboutData.content }}</p>
       </div>
-      <div class="form-group">
-        <label for="mission">Misyon</label>
-        <textarea
-          id="mission"
-          v-model="formData.mission"
-          rows="5"
-          required
-        ></textarea>
+    </div>
+
+    <!-- Hakkımızda Düzenleme/Ekleme Modal -->
+    <div class="modal" v-if="showModal">
+      <div class="modal-content">
+        <h3>{{ isEditing ? 'Hakkımızda Düzenle' : 'Yeni Hakkımızda Ekle' }}</h3>
+        <form @submit.prevent="saveAbout">
+          <div class="form-group">
+            <label for="title">Başlık</label>
+            <input
+              type="text"
+              id="title"
+              v-model="formData.title"
+              required
+            >
+          </div>
+          <div class="form-group">
+            <label for="content">İçerik</label>
+            <textarea
+              id="content"
+              v-model="formData.content"
+              rows="10"
+              required
+            ></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="cancel-btn" @click="closeModal">İptal</button>
+            <button type="submit" class="save-btn">{{ isEditing ? 'Güncelle' : 'Kaydet' }}</button>
+          </div>
+        </form>
       </div>
-      <div class="form-group">
-        <label for="vision">Vizyon</label>
-        <textarea
-          id="vision"
-          v-model="formData.vision"
-          rows="5"
-          required
-        ></textarea>
-      </div>
-      <div class="form-actions">
-        <button type="submit" class="save-btn">Kaydet</button>
-      </div>
-    </form>
+    </div>
   </div>
 </template>
 
@@ -52,30 +63,84 @@ import axios from 'axios'
 export default {
   name: 'AboutView',
   setup() {
+    const aboutData = ref(null)
+    const showModal = ref(false)
+    const isEditing = ref(false)
     const formData = ref({
       title: '',
-      content: '',
-      mission: '',
-      vision: ''
+      content: ''
     })
 
     const fetchAboutData = async () => {
       try {
         const response = await axios.get('/api/about')
-        formData.value = response.data
+        aboutData.value = response.data
       } catch (error) {
         console.error('Error fetching about data:', error)
       }
     }
 
-    const handleSubmit = async () => {
-      try {
-        await axios.put('/api/about', formData.value)
-        alert('Hakkımızda sayfası başarıyla güncellendi!')
-      } catch (error) {
-        console.error('Error updating about page:', error)
-        alert('Güncelleme sırasında bir hata oluştu!')
+    const addAbout = () => {
+      isEditing.value = false
+      formData.value = {
+        title: '',
+        content: ''
       }
+      showModal.value = true
+    }
+
+    const editAbout = () => {
+      if (!aboutData.value) return
+      isEditing.value = true
+      formData.value = { ...aboutData.value }
+      showModal.value = true
+    }
+
+    const deleteAbout = async () => {
+      if (!aboutData.value) return
+      if (!confirm('Hakkımızda sayfasını silmek istediğinizden emin misiniz?')) return
+      
+      try {
+        await axios.delete('/api/about')
+        aboutData.value = null
+        alert('Hakkımızda sayfası başarıyla silindi!')
+      } catch (error) {
+        console.error('Error deleting about page:', error)
+        alert('Silme işlemi sırasında bir hata oluştu!')
+      }
+    }
+
+    const saveAbout = async () => {
+      try {
+        if (isEditing.value) {
+          await axios.put('/api/about', formData.value)
+        } else {
+          // Önce mevcut sayfayı kontrol et
+          try {
+            const response = await axios.get('/api/about')
+            if (response.data) {
+              // Sayfa varsa güncelle
+              await axios.put('/api/about', formData.value)
+            } else {
+              // Sayfa yoksa yeni ekle
+              await axios.post('/api/about', formData.value)
+            }
+          } catch (error) {
+            // Sayfa bulunamazsa yeni ekle
+            await axios.post('/api/about', formData.value)
+          }
+        }
+        await fetchAboutData()
+        showModal.value = false
+        alert(isEditing.value ? 'Hakkımızda sayfası başarıyla güncellendi!' : 'Yeni hakkımızda sayfası başarıyla eklendi!')
+      } catch (error) {
+        console.error('Error saving about page:', error)
+        alert('Kaydetme sırasında bir hata oluştu!')
+      }
+    }
+
+    const closeModal = () => {
+      showModal.value = false
     }
 
     onMounted(() => {
@@ -83,8 +148,15 @@ export default {
     })
 
     return {
+      aboutData,
+      showModal,
+      isEditing,
       formData,
-      handleSubmit
+      addAbout,
+      editAbout,
+      deleteAbout,
+      saveAbout,
+      closeModal
     }
   }
 }
@@ -97,22 +169,97 @@ export default {
   margin: 0 auto;
 }
 
-.about-form {
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.header-actions button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: none;
+  color: white;
+}
+
+.header-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.add-btn {
+  background-color: #4CAF50;
+}
+
+.edit-btn {
+  background-color: #2196F3;
+}
+
+.delete-btn {
+  background-color: #f44336;
+}
+
+.about-content {
   background-color: white;
   padding: 20px;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.form-group {
+.content-section {
   margin-bottom: 20px;
+}
+
+.content-section h4 {
+  color: #2c3e50;
+  margin-bottom: 10px;
+}
+
+.content-section p {
+  color: #666;
+  line-height: 1.6;
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0,0,0,0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-content {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 600px;
+  max-width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.form-group {
+  margin-bottom: 15px;
 }
 
 .form-group label {
   display: block;
   margin-bottom: 5px;
-  font-weight: 600;
-  color: #2c3e50;
+  font-weight: 500;
 }
 
 .form-group input,
@@ -131,20 +278,25 @@ export default {
 .form-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
   margin-top: 20px;
 }
 
+.cancel-btn,
 .save-btn {
-  background-color: #2ecc71;
-  color: white;
-  border: none;
-  padding: 10px 20px;
+  padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 1rem;
 }
 
-.save-btn:hover {
-  background-color: #27ae60;
+.cancel-btn {
+  background-color: #f8f9fa;
+  border: 1px solid #ddd;
+}
+
+.save-btn {
+  background-color: #4CAF50;
+  color: white;
+  border: none;
 }
 </style> 

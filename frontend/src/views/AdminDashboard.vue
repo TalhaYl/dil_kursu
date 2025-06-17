@@ -1,8 +1,8 @@
 <template>
   <div class="admin-dashboard">
     <div class="sidebar">
-      <div class="logo-container">
-        <img src="/public/images/logo.png" alt="Logo" class="logo" />
+      <div class="sidebar-header">
+        <img :src="$logo" alt="Bir Lisan Bir İnsan Logo" class="logo">
         <h2>Admin Panel</h2>
       </div>
       
@@ -38,6 +38,9 @@
           <router-link to="/admin/contact">
             <i class="fas fa-envelope"></i> İletişim
           </router-link>
+          <router-link to="/admin/announcements">
+            <i class="fas fa-bullhorn"></i> Duyurular
+          </router-link>
         </div>
       </nav>
       
@@ -55,8 +58,7 @@
         </div>
         <div class="header-right">
           <div class="user-info">
-            <span>{{ userName }}</span>
-            <img :src="userAvatar" alt="User" class="user-avatar" />
+            <i class="fas fa-user-circle user-avatar-icon"></i>
           </div>
         </div>
       </div>
@@ -79,7 +81,6 @@ export default {
     const router = useRouter()
     
     const userName = ref('Admin Kullanıcı')
-    const userAvatar = ref('/images/logo.png')
     
     // Sayfa başlığını route'a göre dinamik olarak belirle
     const pageTitle = computed(() => {
@@ -90,21 +91,20 @@ export default {
         '/admin/classrooms': 'Sınıflar',
         '/admin/courses': 'Kurslar',
         '/admin/about': 'Hakkımızda',
-        '/admin/contact': 'İletişim'
+        '/admin/contact': 'İletişim',
+        '/admin/announcements': 'Duyurular'
       }
       
       return pathMap[route.path] || 'Dashboard'
     })
     
     const handleLogout = () => {
-      // Burada çıkış işlemleri yapılabilir (API isteği, token silme vs.)
       localStorage.removeItem('auth_token')
       router.push('/login')
     }
 
     return {
       userName,
-      userAvatar,
       pageTitle,
       handleLogout
     }
@@ -129,7 +129,7 @@ export default {
   box-shadow: 2px 0 10px rgba(0,0,0,0.1);
 }
 
-.logo-container {
+.sidebar-header {
   display: flex;
   align-items: center;
   padding: 20px;
@@ -251,16 +251,16 @@ export default {
   align-items: center;
 }
 
-.user-info span {
-  margin-right: 10px;
-  color: #64748b;
-}
-
 .user-avatar {
   width: 40px;
   height: 40px;
   border-radius: 50%;
   object-fit: cover;
+}
+
+.user-avatar-icon {
+  font-size: 40px;
+  color: #64748b; /* Match the user name color */
 }
 
 .content-container {

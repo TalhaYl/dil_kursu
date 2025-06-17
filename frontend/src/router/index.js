@@ -8,6 +8,7 @@ import Classrooms from '@/views/admin/Classrooms.vue'
 import Courses from '@/views/admin/Courses.vue'
 import About from '@/views/admin/About.vue'
 import Contact from '@/views/admin/Contact.vue'
+import AnnouncementsView from '../views/admin/Announcements.vue'
 
 const routes = [
     { 
@@ -58,8 +59,18 @@ const routes = [
             {
                 path: 'contact',
                 component: Contact
+            },
+            {
+                path: 'announcements',
+                component: AnnouncementsView
             }
         ]
+    },
+    {
+        path: '/admin/announcements',
+        name: 'announcements',
+        component: AnnouncementsView,
+        meta: { requiresAuth: true, requiresAdmin: true }
     },
     {
         path: '/teacher',
