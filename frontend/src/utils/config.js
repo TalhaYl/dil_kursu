@@ -20,12 +20,11 @@ export const getApiUrl = () => {
     const protocol = window.location.protocol;
     const host = window.location.host;
     
-    // For Railway deployment, the backend URL should be provided as an environment variable
+    // For DigitalOcean App Platform deployment, the backend URL should be provided as an environment variable
     // But if not, we can try to construct it
-    if (host.includes('railway.app')) {
-      // Try to replace 'frontend' with 'backend' in the URL
-      const backendHost = host.replace('frontend', 'backend');
-      return `${protocol}//${backendHost}`;
+    if (host.includes('ondigitalocean.app')) {
+      // For DigitalOcean App Platform, API routes are typically on the same domain with /api prefix
+      return `${protocol}//${host}/api`;
     }
     
     // For other production deployments, assume API is on the same domain

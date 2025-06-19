@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-// Script to update runtime configuration for Railway deployment
+// Script to update runtime configuration for DigitalOcean App Platform deployment
 const fs = require('fs');
 const path = require('path');
 
 const configPath = path.join(__dirname, '../public/config.js');
-const backendUrl = process.env.RAILWAY_BACKEND_URL || process.env.VUE_APP_API_URL;
+const backendUrl = process.env.VUE_APP_API_URL;
 
 if (backendUrl) {
   const configContent = `// Runtime configuration for the application
