@@ -5,7 +5,7 @@
         <div class="teacher-avatar">
           <img 
             v-if="profile.image_path" 
-            :src="`http://localhost:3000${profile.image_path}`" 
+            :src="getImageUrl(profile.image_path)" 
             :alt="teacherName"
             class="avatar-img"
           />
@@ -83,7 +83,7 @@
                 <div class="student-avatar">
                   <img 
                     v-if="student.image_path" 
-                    :src="`http://localhost:3000${student.image_path}`" 
+                    :src="getImageUrl(student.image_path)" 
                     :alt="student.name"
                     class="student-img"
                   />
@@ -159,7 +159,7 @@
               <div class="large-avatar">
                 <img 
                   v-if="profile.image_path" 
-                  :src="`http://localhost:3000${profile.image_path}`" 
+                  :src="getImageUrl(profile.image_path)" 
                   :alt="profile.name"
                   class="profile-img"
                 />
@@ -202,8 +202,9 @@
 </template>
 
 <script>
-import axios from 'axios';
-import toast from '@/utils/toast';
+import axios from 'axios'
+import toast from '@/utils/toast'
+import { getImageUrl } from '@/utils/config' // Import configuration utility
 
 export default {
   name: 'TeacherPage',
@@ -233,6 +234,7 @@ export default {
     }
   },
   methods: {
+    getImageUrl,
     handleLogout() {
       localStorage.removeItem('token');
       localStorage.removeItem('user');

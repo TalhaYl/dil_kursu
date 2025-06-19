@@ -1,0 +1,20 @@
+services:
+  backend:
+    path: ./backend
+    build:
+      - npm install
+    start: npm start
+  
+  frontend:
+    path: ./frontend
+    build:
+      - npm install
+      - npm run build
+    static:
+      publicPath: dist
+    environment:
+      - NODE_ENV=production
+      - VUE_APP_API_URL=${RAILWAY_BACKEND_URL}
+
+plugins:
+  - name: mysql

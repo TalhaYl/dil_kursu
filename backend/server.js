@@ -26,7 +26,7 @@ const app = express();
 // CORS configuration for production
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? [process.env.FRONTEND_URL, 'https://bitirmeprojesi-dy42e..ondigitalocean.app/dil-kursu-frontend']
+    ? [process.env.FRONTEND_URL, process.env.RAILWAY_FRONTEND_URL]
     : ['http://localhost:8080', 'http://localhost:3000'],
   credentials: true,
   optionsSuccessStatus: 200

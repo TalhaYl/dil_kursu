@@ -94,7 +94,7 @@ export default {
         
         console.log('Öğrenci kayıt verisi:', this.formData);
         
-        const response = await axios.post('http://localhost:3000/api/users/register', this.formData);
+        const response = await axios.post('/api/users/register', this.formData);
         if (response.data.success) {
           toast.success('Kayıt başarılı! Giriş sayfasına yönlendiriliyorsunuz...');
           setTimeout(() => {

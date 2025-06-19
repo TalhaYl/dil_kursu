@@ -89,7 +89,7 @@ export default {
           password: '***'
         });
 
-        const response = await axios.post('http://localhost:3000/api/users/login', {
+        const response = await axios.post('/api/users/login', {
           email: this.formData.email,
           password: this.formData.password
         });

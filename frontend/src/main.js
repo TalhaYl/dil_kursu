@@ -7,11 +7,12 @@ import ElementPlus from 'element-plus';
 import 'element-plus/dist/index.css';
 import toast from './utils/toast';
 import './utils/alertInterceptor'; // Global alert interceptor'ı başlat
+import { getApiUrl } from './utils/config'; // Import configuration utility
 // Eğer ikonları da kullanıyorsanız bu import'u ekleyin
 // import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 
 // Axios base URL configuration
-axios.defaults.baseURL = 'http://localhost:3000'; // Backend sunucunuzun adresi
+axios.defaults.baseURL = getApiUrl(); // Use configuration utility
 
 // Axios interceptor ekle
 axios.interceptors.request.use(

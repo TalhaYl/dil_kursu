@@ -44,7 +44,7 @@
               <div class="student-photo">
                 <img 
                   v-if="student.image_path" 
-                  :src="`http://localhost:3000${student.image_path}`" 
+                  :src="getImageUrl(student.image_path)" 
                   :alt="student.name"
                   class="student-avatar"
                 />
@@ -254,6 +254,7 @@ import 'leaflet/dist/leaflet.css'
 import toast from '@/utils/toast'
 import ImageUploader from '@/components/ImageUploader.vue'
 import branchIconPng from '@/assets/images/a.png'
+import { getImageUrl } from '@/utils/config'
 
 // Leaflet marker icon düzeltmesi
 import icon from 'leaflet/dist/images/marker-icon.png'
@@ -846,12 +847,6 @@ export default {
       }
       return `/api/students/${studentId}/image`;
     }
-
-    const getImageUrl = (imagePath) => {
-      if (!imagePath) return '';
-      // Backend URL'sini kullan
-      return `http://localhost:3000${imagePath}`;
-    };
 
     onMounted(() => {
       fetchStudents()

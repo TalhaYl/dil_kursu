@@ -45,7 +45,7 @@
               <div class="teacher-photo">
                 <img 
                   v-if="teacher.image_path" 
-                  :src="`http://localhost:3000${teacher.image_path}`" 
+                  :src="getImageUrl(teacher.image_path)" 
                   :alt="teacher.name"
                   class="teacher-avatar"
                 />
@@ -206,7 +206,7 @@
             <label>Öğretmen Fotoğrafı</label>
             <div v-if="teacherForm.image_path" class="current-image">
               <img 
-                :src="`http://localhost:3000${teacherForm.image_path}`" 
+                :src="getImageUrl(teacherForm.image_path)" 
                 :alt="teacherForm.name"
                 class="current-teacher-image"
               />
@@ -236,6 +236,7 @@ import axios from 'axios'
 import toast from '@/utils/toast'
 import { useRouter } from 'vue-router'
 import ImageUploader from '@/components/ImageUploader.vue'
+import { getImageUrl } from '@/utils/config'
 
 export default {
   name: 'TeachersView',
@@ -340,6 +341,8 @@ export default {
 
     // Seçili öğretmen var mı kontrolü
     const hasSelectedTeachers = computed(() => selectedTeachers.value.length > 0)
+
+    // Image URL helper is now imported from config utility
 
     // Tümünü seç/kaldır
     const toggleSelectAll = () => {
@@ -806,7 +809,8 @@ export default {
       handleTimeChange,
       resetForm,
       filteredWorkingDays,
-      handleImageUploadSuccess
+      handleImageUploadSuccess,
+      getImageUrl
     }
   }
 }

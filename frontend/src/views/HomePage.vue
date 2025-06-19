@@ -191,6 +191,7 @@
 <script>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import { getImageUrl } from '@/utils/config' // Import configuration utility
 
 export default {
   name: "HomePage",
@@ -362,12 +363,6 @@ export default {
         return 'Program belirtilmemiş'
       }
     }
-
-    const getImageUrl = (path) => {
-      if (!path) return 'https://via.placeholder.com/200x200?text=Yok';
-      if (path.startsWith('http')) return path;
-      return `http://localhost:3000${path}`;
-    };
 
     onMounted(() => {
       fetchAnnouncements()

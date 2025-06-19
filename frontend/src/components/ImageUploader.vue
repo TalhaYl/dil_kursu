@@ -38,6 +38,7 @@
 
 <script>
 import axios from 'axios';
+import { getImageUrl } from '@/utils/config';
 
 export default {
   name: 'ImageUploader',
@@ -179,7 +180,8 @@ export default {
     },
     getPreviewUrl(imagePath) {
       if (!imagePath) return '';
-      return `http://localhost:3000${imagePath}`;
+      if (imagePath.startsWith('http')) return imagePath;
+      return getImageUrl(imagePath);
     }
   }
 };
