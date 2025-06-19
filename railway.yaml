@@ -1,18 +1,26 @@
 services:
+  # Backend service configuration
   backend:
-    path: ./backend
-    build:
-      - npm install
-    start: npm start
+    path: backend
+    nixpacks:
+      install:
+        - npm install
+      start:
+        - npm start
+    env:
+      - NODE_ENV=production
   
+  # Frontend service configuration
   frontend:
-    path: ./frontend
-    build:
-      - npm install
-      - npm run build
-    static:
-      publicPath: dist
-    environment:
+    path: frontend
+    nixpacks:
+      install:
+        - npm install
+      build:
+        - npm run build
+      start:
+        - npm start
+    env:
       - NODE_ENV=production
       - VUE_APP_API_URL=${RAILWAY_BACKEND_URL}
 
