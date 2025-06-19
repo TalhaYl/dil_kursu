@@ -23,13 +23,27 @@ const languageRoutes = require('./routes/languageRoutes');
 
 const app = express();
 
+// CORS configuration for production
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? [process.env.FRONTEND_URL, 'https://bitirmeprojesi-dy42e..ondigitalocean.app/dil-kursu-frontend']
+    : ['http://localhost:8080', 'http://localhost:3000'],
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Statik dosyalar için public klasörünü kullan
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+
+// Health check endpoint for DigitalOcean
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
 
 // Routes
 app.use('/api/users', userRoutes);
@@ -74,8 +88,8 @@ app.use((req, res) => {
 
 // Start server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server is running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
 });
 
 module.exports = app;
