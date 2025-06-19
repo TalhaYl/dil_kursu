@@ -1,7 +1,13 @@
 <template>
   <div class="courses-page">
     <div class="page-header">
-      <h2>Kurslar</h2>
+      <div class="header-left">
+        <h2>Kurslar</h2>
+        <div v-if="selectedCourses.length > 0" class="selection-info">
+          <i class="fas fa-info-circle"></i>
+          {{ selectedCourses.length }} kurs seçili
+        </div>
+      </div>
       <div class="header-buttons">
         <button class="show-inactive-btn" @click="toggleShowInactive" :class="{ 'active': showInactive }">
           <i class="fas" :class="showInactive ? 'fa-eye-slash' : 'fa-eye'"></i>
@@ -11,10 +17,12 @@
           <i class="fas fa-plus"></i> Yeni Kurs
         </button>
         <button class="edit-btn" @click="editCourse(selectedCourse)" :disabled="!selectedCourse">
-          <i class="fas fa-edit"></i> Düzenle
+          <i class="fas fa-edit"></i> 
+          {{ selectedCourse ? 'Düzenle' : 'Düzenle (Kurs Seçin)' }}
         </button>
         <button class="delete-btn" @click="deleteCourse(selectedCourse?.id)" :disabled="!selectedCourse">
-          <i class="fas fa-trash"></i> Sil
+          <i class="fas fa-trash"></i> 
+          {{ selectedCourse ? 'Sil' : 'Sil (Kurs Seçin)' }}
         </button>
       </div>
     </div>
@@ -25,16 +33,15 @@
         <thead>
           <tr>
             <th style="width: 50px;">
-              <input type="checkbox" 
-                     :checked="selectedCourse !== null"
-                     @change="selectedCourse = selectedCourse ? null : courses[0]">
+              <input type="checkbox" v-model="selectAll" @change="toggleSelectAll">
             </th>
-            <th>ID</th>
             <th>Kurs Adı</th>
             <th>Dil</th>
+            <th>Seviye</th>
             <th>Öğretmen</th>
             <th>Sınıf</th>
             <th>Şube</th>
+            <th>Öğrenci Sayısı</th>
             <th>Başlangıç</th>
             <th>Bitiş</th>
             <th>Durum</th>
@@ -42,19 +49,27 @@
         </thead>
         <tbody>
           <tr v-for="course in courses" :key="course.id" 
-              :class="{ 'selected': selectedCourse?.id === course.id }"
-              @click="selectedCourse = course">
-            <td>
-              <input type="checkbox" 
-                     :checked="selectedCourse?.id === course.id"
-                     @click.stop="selectedCourse = selectedCourse?.id === course.id ? null : course">
+              :class="{ 'selected': selectedCourses.includes(course.id) }"
+              @click="toggleCourseSelection(course.id)">
+            <td @click.stop>
+              <input type="checkbox" v-model="selectedCourses" :value="course.id">
             </td>
-            <td>{{ course.id }}</td>
             <td>{{ course.name }}</td>
             <td>{{ course.language }}</td>
+            <td>{{ course.level || 'A1' }}</td>
             <td>{{ course.teacher_name || course.teacher?.name || 'Öğretmen bilgisi yok' }}</td>
             <td>{{ course.classroom_name }}</td>
             <td>{{ course.branch_name }}</td>
+            <td>
+              <div class="student-count">
+                <span class="current-students">{{ course.current_students || 0 }}</span>
+                <span class="separator">/</span>
+                <span class="max-students">{{ course.max_students || 0 }}</span>
+              </div>
+              <div class="enrollment-bar">
+                <div class="enrollment-fill" :style="{ width: getEnrollmentPercentage(course) + '%' }"></div>
+              </div>
+            </td>
             <td>{{ formatDate(course.start_date) }}</td>
             <td>{{ formatDate(course.end_date) }}</td>
             <td>
@@ -88,6 +103,17 @@
                     />
                 </el-select>
             </el-form-item>
+            
+            <el-form-item label="Seviye">
+                <el-select v-model="form.level" placeholder="Seviye seçin">
+                    <el-option label="A1" value="A1" />
+                    <el-option label="A2" value="A2" />
+                    <el-option label="B1" value="B1" />
+                    <el-option label="B2" value="B2" />
+                    <el-option label="C1" value="C1" />
+                    <el-option label="C2" value="C2" />
+                </el-select>
+            </el-form-item>
 
             <el-form-item label="Başlangıç Tarihi">
                 <el-date-picker v-model="form.start_date" type="date" />
@@ -106,6 +132,9 @@
                         <span>{{ teacher.name }}</span>
                         <span class="text-gray-500 ml-2" v-if="teacher.languages && Array.isArray(teacher.languages)">
                             ({{ teacher.languages.join(', ') }})
+                        </span>
+                        <span class="text-orange-500 ml-2" v-if="editingCourse && teacher.id === form.teacher_id && !teacher.languages?.includes(form.language)">
+                            (Mevcut öğretmen - farklı dil)
                         </span>
                     </el-option>
                 </el-select>
@@ -136,56 +165,67 @@
                 </el-select>
             </el-form-item>
             <el-form-item label="Ders Programı">
-                <div class="schedule-grid">
-                    <div v-for="day in weekDays" :key="day" 
-                         :class="['schedule-day', { 'disabled': !(selectedTeacher && selectedTeacher.working_days && selectedTeacher.working_days[day] && selectedTeacher.working_days[day].length > 0) }]">
-                        <div class="day-header">
-                            <el-checkbox 
-                                v-model="form.schedule[day].enabled"
-                                :disabled="!(selectedTeacher && selectedTeacher.working_days && selectedTeacher.working_days[day] && selectedTeacher.working_days[day].length > 0)"
-                            >
-                                {{ day }}
-                            </el-checkbox>
+                <div class="schedule-container">
+                    <div class="days-selection">
+                        <h4>Günleri Seçin:</h4>
+                        <div class="days-grid">
+                            <div v-for="day in weekDays" :key="day" class="day-item">
+                                <el-checkbox 
+                                    v-model="form.schedule[day].enabled"
+                                    :disabled="!(selectedTeacher && selectedTeacher.working_days && selectedTeacher.working_days[day] && selectedTeacher.working_days[day].length > 0)"
+                                    @change="onDayToggle(day)"
+                                >
+                                    {{ day }}
+                                </el-checkbox>
+                                <div v-if="selectedTeacher && selectedTeacher.working_hours && selectedTeacher.working_hours[day]" class="teacher-hours">
+                                    ({{ selectedTeacher.working_hours[day].start }} - {{ selectedTeacher.working_hours[day].end }})
+                                </div>
+                            </div>
                         </div>
-                        <template v-if="selectedTeacher && selectedTeacher.working_days && selectedTeacher.working_days[day] && selectedTeacher.working_days[day].length > 0">
-                            <el-time-select
-                                v-model="form.schedule[day].start"
-                                :max-time="form.schedule[day].end"
-                                start="00:00"
-                                end="23:59"
-                                :step="'00:30'"
-                                placeholder="Başlangıç"
-                                :disabled="!form.schedule[day].enabled"
-                                format="HH:mm"
-                                @change="(val) => form.schedule[day].start = toTimeString(val)"
-                            />
-                            <el-time-select
-                                v-model="form.schedule[day].end"
-                                :min-time="form.schedule[day].start"
-                                start="00:00"
-                                end="23:59"
-                                :step="'00:30'"
-                                placeholder="Bitiş"
-                                :disabled="!form.schedule[day].enabled"
-                                format="HH:mm"
-                                @change="(val) => form.schedule[day].end = toTimeString(val)"
-                            />
-                            <div class="available-hours" v-if="selectedTeacher.working_hours && selectedTeacher.working_hours[day]">
-                                Müsait Saatler: {{ selectedTeacher.working_hours[day].start }} - {{ selectedTeacher.working_hours[day].end }}
-                                <div v-if="selectedTeacher.working_hours[day].busy_slots && selectedTeacher.working_hours[day].busy_slots.length > 0" class="busy-slots">
-                                    Dolu Saatler:
-                                    <div v-for="(slot, index) in selectedTeacher.working_hours[day].busy_slots" :key="index">
-                                        {{ slot.start }} - {{ slot.end }}
+                    </div>
+                    
+                    <div v-if="hasSelectedDays" class="time-slots-selection">
+                        <h4>Ders Saatlerini Seçin:</h4>
+
+                        <div class="time-slots-grid">
+                            <el-checkbox-group 
+                                v-model="form.selectedTimeSlots"
+                                @change="onTimeSlotChange"
+                                class="time-slots-group"
+                            >
+                                <el-checkbox 
+                                    v-for="timeSlot in availableTimeSlots" 
+                                    :key="timeSlot.value"
+                                    :value="timeSlot.value"
+                                    class="time-slot-item"
+                                >
+                                    {{ timeSlot.label }}
+                                </el-checkbox>
+                            </el-checkbox-group>
+                        </div>
+                    </div>
+                    
+                    <div v-if="hasSelectedDays && form.selectedTimeSlots.length > 0" class="schedule-preview">
+                        <h4>Ders Programı Özeti:</h4>
+                        <div class="schedule-summary">
+                            <div v-for="day in enabledDays" :key="day" class="day-schedule">
+                                <strong>{{ day }}:</strong>
+                                <div class="day-schedule-details">
+                                    <div class="time-range">
+                                        <span v-if="form.schedule[day] && form.schedule[day].start && form.schedule[day].end">
+                                            {{ form.schedule[day].start }} - {{ form.schedule[day].end }}
+                                        </span>
+                                    </div>
+                                    <div class="time-slots">
+                                        <span v-for="(timeSlot, index) in form.selectedTimeSlots" :key="index" class="time-slot-tag">
+                                            {{ timeSlot }}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
-                            <div class="no-hours-info" v-else>
-                                Bu gün için çalışma saatleri tanımlanmamış - Manuel saat seçimi yapabilirsiniz
-                            </div>
-                        </template>
-                        <div v-else class="not-available">
-                            Bu gün için müsait değil
                         </div>
+
+
                     </div>
                 </div>
             </el-form-item>
@@ -227,9 +267,9 @@
 </template>
 
 <script>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import toast from '@/utils/toast'
 import ImageUploader from '@/components/ImageUploader.vue'
 
 export default {
@@ -242,9 +282,10 @@ export default {
     const classrooms = ref([])
     const showAddModal = ref(false)
     const editingCourse = ref(null)
-    const selectedCourse = ref(null)
+    const selectedCourses = ref([])
+    const selectAll = ref(false)
     const showInactive = ref(false)
-    const availableLanguages = ['Türkçe', 'İngilizce', 'Almanca', 'Fransızca', 'İspanyolca', 'İtalyanca', 'Rusça', 'Arapça']
+    const availableLanguages = ['Türkçe', 'İngilizce', 'Almanca', 'Fransızca', 'İspanyolca', 'İtalyanca', 'Rusça', 'Arapça', 'Çince', 'Japonca']
     const weekDays = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar']
     
     const form = ref({
@@ -254,16 +295,16 @@ export default {
       classroom_id: '',
       branch_id: '',
       language: '',
+      level: 'A1',
       start_date: '',
       end_date: '',
       schedule: weekDays.reduce((acc, day) => {
         acc[day] = { 
-          start: '',
-          end: '',
           enabled: false 
         };
         return acc;
       }, {}),
+      selectedTimeSlots: [],
       max_students: 20,
       status: 'active',
       image_path: ''
@@ -274,22 +315,70 @@ export default {
     const filteredTeachers = ref([])
     const selectedTeacher = ref(null)
     const selectedClassroom = ref(null)
+    
+    // Saat slotları (1 saatlik bloklar)
+    const availableTimeSlots = ref([
+      { value: '09:00-10:00', label: '09:00 - 10:00' },
+      { value: '10:00-11:00', label: '10:00 - 11:00' },
+      { value: '11:00-12:00', label: '11:00 - 12:00' },
+      { value: '12:00-13:00', label: '12:00 - 13:00' },
+      { value: '13:00-14:00', label: '13:00 - 14:00' },
+      { value: '14:00-15:00', label: '14:00 - 15:00' },
+      { value: '15:00-16:00', label: '15:00 - 16:00' },
+      { value: '16:00-17:00', label: '16:00 - 17:00' },
+      { value: '17:00-18:00', label: '17:00 - 18:00' },
+      { value: '18:00-19:00', label: '18:00 - 19:00' },
+      { value: '19:00-20:00', label: '19:00 - 20:00' },
+      { value: '20:00-21:00', label: '20:00 - 21:00' }
+    ])
+    
+    // Computed properties
+    const hasSelectedDays = computed(() => {
+      return Object.values(form.value.schedule).some(day => day.enabled)
+    })
+    
+    const enabledDays = computed(() => {
+      return weekDays.filter(day => form.value.schedule[day].enabled)
+    })
+
+    // Seçili tek kurs
+    const selectedCourse = computed(() => {
+      if (selectedCourses.value.length === 1) {
+        return courses.value.find(course => course.id === selectedCourses.value[0])
+      }
+      return null
+    })
+
+    // Tümünü seç/kaldır
+    const toggleSelectAll = () => {
+      if (selectAll.value) {
+        selectedCourses.value = courses.value.map(course => course.id)
+      } else {
+        selectedCourses.value = []
+      }
+    }
+
+    // Kurs seçimi toggle
+    const toggleCourseSelection = (courseId) => {
+      const index = selectedCourses.value.indexOf(courseId)
+      if (index > -1) {
+        selectedCourses.value.splice(index, 1)
+      } else {
+        selectedCourses.value.push(courseId)
+      }
+    }
 
     // Kursları getir
     const fetchCourses = async () => {
       try {
-        console.log('Fetching courses...');
         const response = await axios.get('/api/courses', {
           params: {
             showInactive: showInactive.value
           }
         })
-        console.log('Courses fetched successfully:', response.data);
         courses.value = response.data
       } catch (error) {
-        console.error('Error fetching courses:', error)
-        console.error('Error details:', error.response?.data);
-        ElMessage.error('Kurslar yüklenirken bir hata oluştu: ' + (error.response?.data?.error || error.message))
+        toast.error('Kurslar yüklenirken bir hata oluştu: ' + (error.response?.data?.error || error.message))
       }
     }
 
@@ -297,7 +386,6 @@ export default {
     const fetchTeachers = async () => {
       try {
         const response = await axios.get('/api/teachers')
-        console.log('Fetched teachers data:', response.data); // Debug log
         teachers.value = response.data.map(teacher => ({
           id: teacher.id,
           name: teacher.name,
@@ -309,8 +397,7 @@ export default {
         }))
         filteredTeachers.value = [...teachers.value]
       } catch (error) {
-        console.error('Error fetching teachers:', error)
-        ElMessage.error('Öğretmenler yüklenirken bir hata oluştu')
+        toast.error('Öğretmenler yüklenirken bir hata oluştu')
       }
     }
 
@@ -320,7 +407,7 @@ export default {
         const response = await axios.get('/api/branches')
         branches.value = response.data
       } catch (error) {
-        console.error('Error fetching branches:', error)
+        toast.error('Şubeler yüklenirken bir hata oluştu')
       }
     }
 
@@ -339,19 +426,14 @@ export default {
           }))
         }
       } catch (error) {
-        console.error('Error fetching classrooms:', error)
-        ElMessage.error('Sınıflar yüklenirken bir hata oluştu')
+        toast.error('Sınıflar yüklenirken bir hata oluştu')
       }
+
     }
 
     // Kurs düzenleme
     const editCourse = async (course) => {
       editingCourse.value = course
-      console.log('=== EDITING COURSE DEBUG ===');
-      console.log('Full course object:', JSON.stringify(course, null, 2));
-      console.log('course.teacher_id:', course.teacher_id);
-      console.log('course.teacher_name:', course.teacher_name);
-      console.log('course.teacher object:', course.teacher);
       
       try {
         // Backend'den gelen course objesinde artık teacher bilgisi mevcut
@@ -362,12 +444,9 @@ export default {
             working_days: course.teacher.working_days || {},
             working_hours: course.teacher.working_hours || {}
           };
-          console.log('Selected teacher from course.teacher:', selectedTeacher.value);
         } else if (course.teacher_id) {
           // Fallback: Eğer course.teacher yoksa ama teacher_id varsa, API'den getir
-          console.log('Teacher object not found in course, fetching from API...');
           const teacherResponse = await axios.get(`/api/courses/teacher-hours/${course.teacher_id}`);
-          console.log('Teacher API response:', teacherResponse.data);
           
           selectedTeacher.value = {
             id: course.teacher_id,
@@ -375,118 +454,117 @@ export default {
             working_days: teacherResponse.data.working_days || {},
             working_hours: teacherResponse.data.available_hours || {}
           };
-          console.log('Selected teacher from API fallback:', selectedTeacher.value);
         } else {
-          console.warn('No teacher information found in course data');
           selectedTeacher.value = null;
         }
         
         // Form verilerini ayarla
         const schedule = course.schedule || {};
         const defaultSchedule = weekDays.reduce((acc, day) => {
-          acc[day] = { 
-            start: '',
-            end: '',
-            enabled: false 
-          };
+          acc[day] = { enabled: false };
           return acc;
         }, {});
+
+        let allSelectedTimeSlots = [];
 
         // Mevcut programı işle
         Object.entries(schedule).forEach(([day, times]) => {
           if (times && times.start && times.end) {
             defaultSchedule[day] = {
-              start: times.start, // String olarak kullan
-              end: times.end,     // String olarak kullan
-              enabled: true
+              start: times.start,
+              end: times.end,
+              enabled: true,
+              slots: times.slots || []
             };
+            
+            // Eğer slots varsa, onları allSelectedTimeSlots'a ekle
+            if (times.slots && times.slots.length > 0) {
+              times.slots.forEach(slot => {
+                if (!allSelectedTimeSlots.includes(slot)) {
+                  allSelectedTimeSlots.push(slot);
+                }
+              });
+            } else {
+              // Eski format için saat aralığından slot oluştur
+              const startHour = parseInt(times.start.split(':')[0]);
+              const endHour = parseInt(times.end.split(':')[0]);
+              for (let hour = startHour; hour < endHour; hour++) {
+                const slotValue = `${hour.toString().padStart(2, '0')}:00-${(hour + 1).toString().padStart(2, '0')}:00`;
+                if (!allSelectedTimeSlots.includes(slotValue)) {
+                  allSelectedTimeSlots.push(slotValue);
+                }
+              }
+            }
           }
         });
 
         form.value = {
           name: course.name,
           language: course.language,
+          level: course.level || 'A1',
           teacher_id: course.teacher_id,
           branch_id: course.branch_id,
           classroom_id: course.classroom_id,
           start_date: course.start_date,
           end_date: course.end_date,
           schedule: defaultSchedule,
+          selectedTimeSlots: allSelectedTimeSlots,
           max_students: course.max_students || 20,
           status: course.status || 'active',
           image_path: course.image_path || ''
         }
 
-        console.log('Form data set to:', form.value);
-        console.log('=== END COURSE DEBUG ===');
-
         // Şubeye göre sınıfları filtrele
         if (course.branch_id) {
-          console.log('Filtering classrooms for branch:', course.branch_id);
           await filterClassroomsByBranch(course.branch_id);
         }
 
-        // Dile göre öğretmenleri filtrele
+        // Dile göre öğretmenleri filtrele (teacher_id set edildikten sonra)
         if (course.language) {
-          console.log('Filtering teachers for language:', course.language);
           filterTeachersByLanguage();
         }
 
       } catch (error) {
-        console.error('Error loading course details:', error);
-        console.error('Error details:', error.response?.data);
-        ElMessage.error('Kurs bilgileri yüklenirken bir hata oluştu: ' + (error.response?.data?.error || error.message));
+        toast.error('Kurs bilgileri yüklenirken bir hata oluştu: ' + (error.response?.data?.error || error.message));
       }
 
       showAddModal.value = true
     }
 
-    // Yardımcı fonksiyon: Her türlü saat değerini 'HH:mm' stringine çevirir
-    function toTimeString(val) {
-      console.log('toTimeString called with:', val, 'type:', typeof val);
-      
-      if (!val) {
-        return '';
-      }
-      
-      if (typeof val === 'string') {
-        // Eğer zaten HH:mm formatındaysa
-        if (/^\d{2}:\d{2}$/.test(val)) {
-          return val;
+    // Gün seçimi değiştiğinde
+    const onDayToggle = () => {
+      updateScheduleFromSelections()
+    }
+    
+    // Saat slotu seçimi değiştiğinde
+    const onTimeSlotChange = () => {
+      updateScheduleFromSelections()
+    }
+    
+    // Seçilen günler ve saatlerden schedule objesi oluştur
+    const updateScheduleFromSelections = () => {
+      weekDays.forEach(day => {
+        if (form.value.schedule[day].enabled && form.value.selectedTimeSlots.length > 0) {
+          // Seçilen saat slotlarını birleştir
+          const timeSlots = form.value.selectedTimeSlots.map(slot => {
+            const [start, end] = slot.split('-')
+            return { start, end }
+          })
+          
+          // İlk ve son saati al
+          const startTime = timeSlots[0].start
+          const endTime = timeSlots[timeSlots.length - 1].end
+          
+          form.value.schedule[day] = {
+            enabled: true,
+            start: startTime,
+            end: endTime,
+            slots: form.value.selectedTimeSlots
+          }
+        } else if (!form.value.schedule[day].enabled) {
+          form.value.schedule[day] = { enabled: false }
         }
-        // Eğer HH:mm:ss formatındaysa
-        if (/^\d{2}:\d{2}:\d{2}$/.test(val)) {
-          return val.slice(0, 5);
-        }
-        return val;
-      }
-      
-      if (val instanceof Date) {
-        return val.toTimeString().slice(0,5);
-      }
-      
-      if (typeof val === 'object' && val !== null) {
-        // Element Plus time-select object formatları
-        if (val.hours !== undefined && val.minutes !== undefined) {
-          return `${val.hours.toString().padStart(2, '0')}:${val.minutes.toString().padStart(2, '0')}`;
-        }
-        
-        if (val.value && typeof val.value === 'string') {
-          return val.value;
-        }
-        
-        // Eğer object'in string representation'ı HH:mm formatındaysa
-        const strVal = val.toString();
-        if (/^\d{2}:\d{2}$/.test(strVal)) {
-          return strVal;
-        }
-        
-        console.error('Unrecognized time object format:', val);
-        console.error('Object keys:', Object.keys(val));
-        return '';
-      }
-      
-      return '';
+      })
     }
 
     // Kurs kaydetme
@@ -508,62 +586,42 @@ export default {
           .map(([key]) => key);
 
         if (missingFields.length > 0) {
-          ElMessage.error(`Lütfen şu alanları doldurun: ${missingFields.join(', ')}`);
+          toast.error(`Lütfen şu alanları doldurun: ${missingFields.join(', ')}`);
           return;
         }
 
         // Ders programı kontrolü
-        const hasValidSchedule = Object.entries(form.value.schedule).some(([day, times]) => {
-          if (!times.enabled) return false;
-          if (!times.start || !times.end) {
-            ElMessage.error(`${day} günü için başlangıç ve bitiş saatlerini belirtmelisiniz`);
-            return false;
-          }
-          return true;
+        const hasValidSchedule = Object.entries(form.value.schedule).some(([, dayData]) => {
+          return dayData.enabled;
         });
 
         if (!hasValidSchedule) {
-          ElMessage.error('En az bir gün için geçerli bir ders programı belirlemelisiniz');
+          toast.error('En az bir gün seçmelisiniz');
+          return;
+        }
+
+        if (form.value.selectedTimeSlots.length === 0) {
+          toast.error('En az bir saat dilimi seçmelisiniz');
           return;
         }
 
         const courseData = {
           name: form.value.name,
           language: form.value.language,
+          level: form.value.level || 'A1',
           teacher_id: form.value.teacher_id,
           classroom_id: form.value.classroom_id,
           branch_id: form.value.branch_id,
           course_type: form.value.course_type || 'Physical',
           start_date: form.value.start_date ? new Date(form.value.start_date).toISOString().split('T')[0] : '',
           end_date: form.value.end_date ? new Date(form.value.end_date).toISOString().split('T')[0] : '',
-          schedule: Object.entries(form.value.schedule).reduce((acc, [day, times]) => {
-            console.log(`Processing day ${day}:`, times);
-            
-            if (times.enabled && times.start && times.end) {
-              console.log(`${day} is enabled with times:`, { start: times.start, end: times.end });
-              
-              const startTime = toTimeString(times.start);
-              const endTime = toTimeString(times.end);
-              
-              console.log(`${day} formatted times:`, { startTime, endTime });
-              
-              // Sadece geçerli saat değerleri varsa ekle
-              if (startTime && endTime && startTime !== '' && endTime !== '') {
-                acc[day] = {
-                  start: startTime,
-                  end: endTime
-                };
-                console.log(`${day} added to schedule:`, acc[day]);
-              } else {
-                console.warn(`Invalid time values for ${day}:`, { 
-                  start: times.start, 
-                  end: times.end,
-                  startFormatted: startTime,
-                  endFormatted: endTime
-                });
-              }
-            } else {
-              console.log(`${day} is disabled or missing times:`, times);
+          schedule: Object.entries(form.value.schedule).reduce((acc, [day, dayData]) => {
+            if (dayData.enabled && dayData.start && dayData.end) {
+              acc[day] = {
+                start: dayData.start,
+                end: dayData.end,
+                slots: dayData.slots || []
+              };
             }
             return acc;
           }, {}),
@@ -571,72 +629,68 @@ export default {
           image_path: form.value.image_path || ''
         };
 
-        // Debug: Backend'e gönderilen veriyi kontrol et
-        console.log('=== COURSE SAVE DEBUG ===');
-        console.log('Form schedule before processing:', form.value.schedule);
-        console.log('Sending course data:', courseData);
-        console.log('Schedule data:', courseData.schedule);
-        console.log('Schedule JSON:', JSON.stringify(courseData.schedule, null, 2));
-        console.log('=== END DEBUG ===');
-
         if (form.value.max_students) courseData.max_students = form.value.max_students;
 
         if (editingCourse.value) {
           await axios.put(`/api/courses/${editingCourse.value.id}`, courseData);
-          console.log('Course updated successfully');
         } else {
-          const response = await axios.post('/api/courses', courseData);
-          console.log('Course created successfully:', response.data);
+          await axios.post('/api/courses', courseData);
         }
         
-        console.log('Closing modal and resetting form...');
         showAddModal.value = false;
         editingCourse.value = null;
         form.value = {
           name: '',
           language: '',
+          level: 'A1',
           teacher_id: '',
           branch_id: '',
           classroom_id: '',
           start_date: '',
           end_date: '',
           schedule: weekDays.reduce((acc, day) => {
-            acc[day] = { start: '', end: '', enabled: false };
+            acc[day] = { enabled: false };
             return acc;
           }, {}),
+          selectedTimeSlots: [],
           max_students: 20,
           status: 'active',
           image_path: ''
         };
         
-        console.log('Fetching updated courses list...');
         await fetchCourses();
-        console.log('Course save process completed');
-        ElMessage.success('Kurs başarıyla kaydedildi!');
-      } catch (error) {
-        console.error('Error saving course:', error);
-        ElMessage.error('Kurs kaydedilirken bir hata oluştu: ' + (error.response?.data?.error || error.message));
-      }
+                  toast.success('Kurs başarıyla kaydedildi!')
+              } catch (error) {
+          toast.error('Kurs kaydedilirken bir hata oluştu: ' + (error.response?.data?.error || error.message));
+        }
     };
 
     // Kurs silme
     const deleteCourse = async (id) => {
-      if (confirm('Bu kursu silmek istediğinizden emin misiniz?')) {
+      const confirmed = await toast.confirm('Bu kursu silmek istediğinizden emin misiniz?', 'Kurs Silme')
+      if (confirmed) {
         try {
           await axios.delete(`/api/courses/${id}`)
-          ElMessage.success('Kurs başarıyla silindi')
+          toast.success('Kurs başarıyla silindi')
           fetchCourses()
         } catch (error) {
-          console.error('Error deleting course:', error)
           const errorMessage = error.response?.data?.error || 'Kurs silinirken bir hata oluştu'
-          ElMessage.error(errorMessage)
+          toast.error(errorMessage)
         }
       }
     }
 
     // Tarih formatla
     const formatDate = (date) => {
+      if (!date) return '-'
       return new Date(date).toLocaleDateString('tr-TR')
+    }
+
+    // Kayıt yüzdesi hesapla
+    const getEnrollmentPercentage = (course) => {
+      if (!course.max_students || course.max_students === 0) return 0
+      const percentage = ((course.current_students || 0) / course.max_students) * 100
+      return Math.min(percentage, 100) // 100'ü geçmesin
     }
 
     // Seçilen dile göre öğretmenleri filtrele
@@ -646,37 +700,42 @@ export default {
         return
       }
 
-      filteredTeachers.value = teachers.value.filter(teacher => 
+      // Dile göre filtrele
+      let filtered = teachers.value.filter(teacher => 
         teacher.languages && 
         Array.isArray(teacher.languages) && 
         teacher.languages.includes(form.value.language)
       )
 
+      // Eğer kurs düzenleme modundaysa ve mevcut öğretmen listede yoksa, onu da ekle
+      if (editingCourse.value && form.value.teacher_id) {
+        const currentTeacher = teachers.value.find(t => t.id === form.value.teacher_id)
+        const isCurrentTeacherInFiltered = filtered.some(t => t.id === form.value.teacher_id)
+        
+        if (currentTeacher && !isCurrentTeacherInFiltered) {
+          filtered.unshift(currentTeacher) // Başa ekle
+        }
+      }
+
+      filteredTeachers.value = filtered
+
       if (filteredTeachers.value.length === 0) {
-        ElMessage.warning('Seçilen dilde ders verebilecek öğretmen bulunamadı')
+        toast.warning('Seçilen dilde ders verebilecek öğretmen bulunamadı')
       }
     }
 
     // Öğretmen seçildiğinde
     const handleTeacherSelect = async (teacherId) => {
       try {
-        console.log('Selecting teacher with ID:', teacherId);
-        
         // Öğretmenin müsait saatlerini getir
         const response = await axios.get(`/api/courses/teacher-hours/${teacherId}`);
         const teacherData = response.data;
-        
-        console.log('Teacher hours response:', teacherData);
-        console.log('Working days:', teacherData.working_days);
-        console.log('Available hours:', teacherData.available_hours);
         
         selectedTeacher.value = {
           id: teacherId,
           working_days: teacherData.working_days,
           working_hours: teacherData.available_hours
         };
-        
-        console.log('Selected teacher object:', selectedTeacher.value);
         
         // Öğretmenin şubesini getir
         const teacherDetailsResponse = await axios.get(`/api/teachers/${teacherId}`);
@@ -687,23 +746,15 @@ export default {
 
         // Form'daki schedule'ı öğretmenin çalışma saatlerine göre sıfırla
         form.value.schedule = weekDays.reduce((acc, day) => {
-          const hasWorkingHours = selectedTeacher.value.working_hours[day];
-          console.log(`Day ${day} - hasWorkingHours:`, hasWorkingHours);
-          
-          acc[day] = {
-            start: hasWorkingHours ? selectedTeacher.value.working_hours[day].start : '',
-            end: hasWorkingHours ? selectedTeacher.value.working_hours[day].end : '',
-            enabled: false
-          };
-          
+          acc[day] = { enabled: false };
           return acc;
         }, {});
-
-        console.log('Teacher selected, form schedule updated:', form.value.schedule);
+        
+        // Saat seçimlerini de temizle
+        form.value.selectedTimeSlots = [];
 
       } catch (error) {
-        console.error('Error fetching teacher details:', error);
-        ElMessage.error('Öğretmen bilgileri alınırken bir hata oluştu');
+        toast.error('Öğretmen bilgileri alınırken bir hata oluştu');
       }
     };
 
@@ -725,9 +776,9 @@ export default {
           }
         }
       } catch (error) {
-        console.error('Error fetching classrooms:', error)
-        ElMessage.error('Sınıflar yüklenirken bir hata oluştu')
+        toast.error('Sınıflar yüklenirken bir hata oluştu')
       }
+
     }
 
     // Şube değiştiğinde sınıfları güncelle
@@ -742,9 +793,21 @@ export default {
 
     // Dil değiştiğinde öğretmenleri filtrele
     watch(() => form.value.language, () => {
+      const currentTeacherId = form.value.teacher_id
       filterTeachersByLanguage()
-      form.value.teacher_id = ''
-      selectedTeacher.value = null
+      
+      // Eğer düzenleme modunda değilse teacher_id'yi temizle
+      if (!editingCourse.value) {
+        form.value.teacher_id = ''
+        selectedTeacher.value = null
+      } else {
+        // Düzenleme modundaysa, mevcut öğretmen filtrelenmiş listede yoksa seçimi koru
+        const isCurrentTeacherInFiltered = filteredTeachers.value.some(t => t.id === currentTeacherId)
+        if (!isCurrentTeacherInFiltered && currentTeacherId) {
+          // Öğretmen filtrelendi ama form'da kalması lazım
+          form.value.teacher_id = currentTeacherId
+        }
+      }
     })
 
     // Öğretmen seçimi değiştiğinde
@@ -756,7 +819,7 @@ export default {
 
     const handleImageUploadSuccess = (imagePath) => {
       form.value.image_path = imagePath;
-      ElMessage.success('Resim başarıyla yüklendi');
+              toast.success('Resim başarıyla yüklendi');
     }
 
     // Tarihi geçmiş kursları göster/gizle
@@ -779,10 +842,10 @@ export default {
       const numValue = parseInt(value);
       if (selectedClassroom.value && numValue > selectedClassroom.value.capacity) {
         form.value.max_students = selectedClassroom.value.capacity;
-        ElMessage.warning(`Maksimum öğrenci sayısı sınıf kapasitesini (${selectedClassroom.value.capacity}) geçemez`);
-      } else if (numValue < 1) {
-        form.value.max_students = 1;
-        ElMessage.warning('Maksimum öğrenci sayısı en az 1 olmalıdır');
+        toast.warning(`Maksimum öğrenci sayısı sınıf kapasitesini (${selectedClassroom.value.capacity}) geçemez`);
+              } else if (numValue < 1) {
+          form.value.max_students = 1;
+          toast.warning('Maksimum öğrenci sayısı en az 1 olmalıdır');
       }
     }
 
@@ -800,7 +863,11 @@ export default {
       classrooms,
       showAddModal,
       editingCourse,
+      selectedCourses,
       selectedCourse,
+      selectAll,
+      toggleSelectAll,
+      toggleCourseSelection,
       showInactive,
       form,
       availableLanguages,
@@ -819,6 +886,13 @@ export default {
       handleClassroomSelect,
       validateMaxStudents,
       selectedClassroom,
+      availableTimeSlots,
+      hasSelectedDays,
+      enabledDays,
+      onDayToggle,
+      onTimeSlotChange,
+      updateScheduleFromSelections,
+      getEnrollmentPercentage
     }
   }
 }
@@ -834,6 +908,28 @@ export default {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.selection-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #e3f2fd;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  color: #1976d2;
+  border: 1px solid #bbdefb;
+}
+
+.selection-info i {
+  color: #2196F3;
 }
 
 .header-buttons {
@@ -893,8 +989,15 @@ export default {
 }
 
 .add-btn:disabled, .edit-btn:disabled, .delete-btn:disabled {
-  background-color: #cccccc;
+  background-color: #cccccc !important;
   cursor: not-allowed;
+  opacity: 0.6;
+  color: #666 !important;
+}
+
+.edit-btn:disabled:hover, .delete-btn:disabled:hover {
+  background-color: #cccccc !important;
+  transform: none;
 }
 
 .courses-list {
@@ -920,8 +1023,22 @@ th {
   font-weight: 600;
 }
 
+tr {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+tr:hover {
+  background-color: #f8f9fa;
+}
+
 tr.selected {
-  background-color: #e3f2fd;
+  background-color: #e3f2fd !important;
+  border-left: 4px solid #2196F3;
+}
+
+tr.selected td {
+  font-weight: 500;
 }
 
 .status-badge {
@@ -992,78 +1109,116 @@ input[type="checkbox"] {
   border-radius: 4px;
 }
 
-.schedule-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 15px;
-  margin-top: 10px;
+.schedule-container {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
 }
 
-.schedule-day {
+.schedule-container h4 {
+  margin: 0 0 15px 0;
+  color: #495057;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.days-selection {
+  margin-bottom: 25px;
+}
+
+.days-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.day-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.teacher-hours {
+  font-size: 12px;
+  color: #6c757d;
+  margin-left: 24px;
+}
+
+.time-slots-selection {
+  margin-bottom: 25px;
+}
+
+.time-slots-grid {
+  display: flex;
+  flex-direction: column;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 10px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+}
+
+.time-slots-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.time-slot-item {
+  display: flex;
+  align-items: center;
+}
+
+.schedule-preview {
+  background: white;
+  padding: 15px;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+}
+
+.schedule-summary {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px;
-  border: 1px solid #eee;
+}
+
+.day-schedule {
+  padding: 8px 12px;
+  background: #e3f2fd;
   border-radius: 4px;
-  background-color: #f8f9fa;
-  transition: all 0.3s ease;
+  border-left: 3px solid #2196F3;
 }
 
-.day-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.day-header .el-checkbox {
+.day-schedule strong {
+  color: #1976d2;
   margin-right: 8px;
 }
 
-.schedule-day.disabled {
-  opacity: 0.5;
-  background-color: #f5f5f5;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-.schedule-day.disabled .el-time-picker {
-  pointer-events: none;
-  background-color: #f5f5f5;
-}
-
-.schedule-day.disabled .el-input__wrapper {
-  background-color: #f5f5f5;
-  cursor: not-allowed;
-}
-
-.available-hours {
-  font-size: 0.9em;
-  color: #4CAF50;
+.day-schedule-details {
   margin-top: 5px;
 }
 
-.no-hours-info {
-  font-size: 0.9em;
-  color: #f39c12;
-  margin-top: 5px;
-  font-style: italic;
-}
-
-.not-available {
-  font-size: 0.9em;
-  color: #f44336;
-  margin-top: 5px;
-}
-
-.schedule-day .el-time-picker {
-  width: 100%;
-}
-
-.schedule-day label {
+.time-range {
   font-weight: 500;
-  color: #606266;
+  color: #1976d2;
   margin-bottom: 5px;
+}
+
+.time-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.time-slot-tag {
+  background: #ffffff;
+  border: 1px solid #2196F3;
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: #1976d2;
 }
 
 .text-gray-500 {
@@ -1103,5 +1258,214 @@ input[type="checkbox"] {
   margin-top: 5px;
   font-size: 0.9em;
   color: #f56c6c;
+}
+
+.student-count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.current-students {
+  color: #2196F3;
+}
+
+.separator {
+  margin: 0 4px;
+  color: #666;
+}
+
+.max-students {
+  color: #666;
+}
+
+.enrollment-bar {
+  width: 100%;
+  height: 4px;
+  background-color: #f0f0f0;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.enrollment-fill {
+  height: 100%;
+  background-color: #4CAF50;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.enrollment-fill[style*="100%"] {
+  background-color: #FF9800;
+}
+
+.enrollment-fill[style*="width: 0%"] {
+  background-color: #e0e0e0;
+}
+
+/* Mobil Responsive Tasarım */
+@media (max-width: 768px) {
+  .courses-page {
+    padding: 10px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+
+  .header-left {
+    align-items: flex-start;
+  }
+
+  .header-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .header-buttons button {
+    padding: 12px 16px;
+    font-size: 14px;
+    min-height: 44px;
+    text-align: center;
+  }
+
+  /* Tablo mobil görünümü */
+  .courses-list {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    min-width: 1000px;
+    font-size: 12px;
+  }
+
+  th, td {
+    padding: 8px 4px;
+    min-width: 80px;
+  }
+
+  .student-count {
+    font-size: 12px;
+  }
+
+  /* Modal mobil optimizasyonu */
+  .el-dialog {
+    width: 95% !important;
+    margin: 10px !important;
+  }
+
+  .el-dialog__body {
+    padding: 15px !important;
+  }
+
+  .el-form-item {
+    margin-bottom: 15px;
+  }
+
+  .el-form-item__label {
+    font-size: 14px !important;
+  }
+
+  .el-input__inner,
+  .el-select .el-input__inner,
+  .el-textarea__inner {
+    padding: 12px !important;
+    font-size: 16px !important; /* iOS zoom'u engellemek için */
+  }
+
+  /* Ders programı mobil optimizasyonu */
+  .schedule-container {
+    padding: 15px;
+  }
+
+  .days-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .time-slots-group {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .time-slots-grid {
+    max-height: 150px;
+    padding: 8px;
+  }
+
+  .schedule-summary {
+    gap: 6px;
+  }
+
+  .time-slots {
+    gap: 2px;
+  }
+
+  .time-slot-tag {
+    padding: 1px 6px;
+    font-size: 10px;
+  }
+
+  /* Element Plus buton mobil optimizasyonu */
+  .el-button {
+    padding: 12px 20px !important;
+    font-size: 14px !important;
+    min-height: 44px !important;
+  }
+
+  .el-button--small {
+    padding: 8px 15px !important;
+    font-size: 12px !important;
+    min-height: 36px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .courses-page {
+    padding: 5px;
+  }
+
+  .page-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .header-buttons {
+    grid-template-columns: 1fr;
+  }
+
+  table {
+    font-size: 11px;
+    min-width: 800px;
+  }
+
+  th, td {
+    padding: 6px 2px;
+  }
+
+  .schedule-container {
+    padding: 10px;
+  }
+
+  .schedule-container h4 {
+    font-size: 14px;
+  }
+
+  .el-dialog {
+    margin: 5px !important;
+  }
+
+  .el-dialog__body {
+    padding: 10px !important;
+  }
+
+  .teacher-hours {
+    font-size: 10px;
+  }
 }
 </style> 

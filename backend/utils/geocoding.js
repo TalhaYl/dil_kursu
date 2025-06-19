@@ -1,12 +1,13 @@
 const axios = require('axios');
+require('dotenv').config();
 
-// Google Maps API Key - Buraya kendi API anahtarınızı yazın
-const GOOGLE_MAPS_API_KEY = 'AIzaSyA1q1I6HAQ_A_Hq1pzkBVXyIC8bBvnVMAQ';
+// Google Maps API Key - .env dosyasından alınır
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 
 // API Key test fonksiyonu
 const testApiKey = async () => {
     try {
-        const testAddress = 'Istanbul, Turkey';
+        const testAddress = 'Girne, KKTC';
         const response = await axios.get(
             `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(testAddress)}&key=${GOOGLE_MAPS_API_KEY}`
         );

@@ -141,15 +141,16 @@ export default {
           }
         });
 
-        console.log('Upload response:', response.data); // Debug için
+        console.log('=== IMAGE UPLOADER DEBUG ===');
+        console.log('Upload response:', response.data);
+        console.log('Upload URL:', this.uploadUrl);
 
         if (response.data && response.data.image_path) {
-          const imagePath = response.data.image_path.startsWith('http') 
-            ? response.data.image_path 
-            : `http://localhost:3000${response.data.image_path}`;
+          console.log('Raw image_path from backend:', response.data.image_path);
           
-          this.$emit('update:modelValue', imagePath);
+          this.$emit('update:modelValue', response.data.image_path);
           this.$emit('upload-success', response.data.image_path);
+          console.log('Emitted upload-success with:', response.data.image_path);
           this.showSuccess('Resim başarıyla yüklendi');
         } else {
           throw new Error('Resim yükleme başarısız: Geçersiz yanıt formatı');

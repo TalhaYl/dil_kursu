@@ -51,11 +51,110 @@ exports.registerToCourse = async (req, res) => {
       return res.status(400).json({ message: 'Bu kursa zaten kayıtlısınız' });
     }
 
-    // Öğrenciyi kursa kaydet
-    await pool.query(
-      'INSERT INTO student_courses (student_id, course_id) VALUES (?, ?)',
-      [studentDbId, courseId]
-    );
+    // Zaman çakışması kontrolü (checkScheduleConflict fonksiyonunu import etmek gerekebilir)
+    // Bu fonksiyon için studentRoutes.js'deki fonksiyonu kullanacağız
+    const connection = await pool.getConnection();
+    try {
+      // Öğrencinin mevcut kurslarını ve programlarını al
+      const [existingCourses] = await connection.query(`
+        SELECT c.id, c.name, c.schedule, c.start_date, c.end_date
+        FROM student_courses sc
+        JOIN courses c ON sc.course_id = c.id
+        WHERE sc.student_id = ? AND c.status = 'active'
+      `, [studentDbId]);
+
+      // Yeni kursun programını al
+      const [newCourse] = await connection.query(`
+        SELECT id, name, schedule, start_date, end_date
+        FROM courses
+        WHERE id = ? AND status = 'active'
+      `, [courseId]);
+
+      if (newCourse.length > 0) {
+        const newCourseData = newCourse[0];
+        let newSchedule;
+        
+        try {
+          newSchedule = typeof newCourseData.schedule === 'string' 
+            ? JSON.parse(newCourseData.schedule) 
+            : newCourseData.schedule;
+        } catch (e) {
+          return res.status(400).json({ message: 'Kursun program bilgisi geçersiz' });
+        }
+
+        // Tarih aralığı ve saat çakışması kontrolü
+        const newStartDate = new Date(newCourseData.start_date);
+        const newEndDate = new Date(newCourseData.end_date);
+
+        for (const existingCourse of existingCourses) {
+          const existingStartDate = new Date(existingCourse.start_date);
+          const existingEndDate = new Date(existingCourse.end_date);
+
+          // Tarih aralıkları çakışıyor mu?
+          const dateOverlap = (newStartDate <= existingEndDate) && (newEndDate >= existingStartDate);
+          
+          if (dateOverlap) {
+            let existingSchedule;
+            try {
+              existingSchedule = typeof existingCourse.schedule === 'string' 
+                ? JSON.parse(existingCourse.schedule) 
+                : existingCourse.schedule;
+            } catch (e) {
+              continue; // Geçersiz schedule'u atla
+            }
+
+                         // Günlük saat çakışması kontrolü
+             for (const [day, newTimeSlot] of Object.entries(newSchedule)) {
+               if (existingSchedule[day] && newTimeSlot && existingSchedule[day]) {
+                 // Önce slot bazlı kontrol yap (daha detaylı)
+                 if (newTimeSlot.slots && existingSchedule[day].slots) {
+                   for (const newSlot of newTimeSlot.slots) {
+                     for (const existingSlot of existingSchedule[day].slots) {
+                       const [newSlotStart, newSlotEnd] = newSlot.split('-');
+                       const [existingSlotStart, existingSlotEnd] = existingSlot.split('-');
+                       
+                       if (newSlotStart && newSlotEnd && existingSlotStart && existingSlotEnd) {
+                         const slotOverlap = (newSlotStart < existingSlotEnd) && (newSlotEnd > existingSlotStart);
+                         
+                         if (slotOverlap) {
+                           return res.status(400).json({ 
+                             message: `"${existingCourse.name}" kursu ile zaman çakışması var. ${day} günü ${existingSlot} saatleri çakışıyor.`
+                           });
+                         }
+                       }
+                     }
+                   }
+                 } else {
+                   // Slot yoksa genel start-end kontrolü yap
+                   const newStart = newTimeSlot.start;
+                   const newEnd = newTimeSlot.end;
+                   const existingStart = existingSchedule[day].start;
+                   const existingEnd = existingSchedule[day].end;
+
+                   if (newStart && newEnd && existingStart && existingEnd) {
+                     const timeOverlap = (newStart < existingEnd) && (newEnd > existingStart);
+                     
+                     if (timeOverlap) {
+                       return res.status(400).json({ 
+                         message: `"${existingCourse.name}" kursu ile zaman çakışması var. ${day} günü ${existingStart}-${existingEnd} saatleri çakışıyor.`
+                       });
+                     }
+                   }
+                 }
+               }
+             }
+          }
+        }
+      }
+
+      // Öğrenciyi kursa kaydet
+      await connection.query(
+        'INSERT INTO student_courses (student_id, course_id) VALUES (?, ?)',
+        [studentDbId, courseId]
+      );
+    } finally {
+      connection.release();
+    }
 
     res.json({ message: 'Kursa başarıyla kaydoldunuz' });
   } catch (error) {

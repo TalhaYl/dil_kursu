@@ -25,7 +25,6 @@
                      :checked="selectedBranch !== null"
                      @change="selectedBranch = selectedBranch ? null : branches[0]">
             </th>
-            <th>ID</th>
             <th>Şube Adı</th>
             <th>Adres</th>
             <th>Telefon</th>
@@ -41,7 +40,6 @@
                      :checked="selectedBranch?.id === branch.id"
                      @click.stop="selectedBranch = selectedBranch?.id === branch.id ? null : branch">
             </td>
-            <td>{{ branch.id }}</td>
             <td>{{ branch.name }}</td>
             <td>{{ branch.address }}</td>
             <td>{{ branch.phone }}</td>
@@ -164,9 +162,9 @@
 </template>
 
 <script>
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import axios from 'axios'
-import locationData from '@/assets/locations.json'
+import toast from '@/utils/toast'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import ImageUploader from '@/components/ImageUploader.vue'
@@ -209,45 +207,71 @@ export default {
       social_facilities: ''
     })
 
-    // Dinamik şehir ve ilçe listeleri
-    const countryList = Object.keys(locationData)
-    const cityList = computed(() => branchForm.value.country ? Object.keys(locationData[branchForm.value.country]) : [])
-    const districtList = computed(() => (branchForm.value.country && branchForm.value.city) ? locationData[branchForm.value.country][branchForm.value.city] : [])
-
+  
     // Haritayı başlat
     const initMap = () => {
       const mapElement = document.getElementById('map')
-      if (!mapElement) return
+      if (!mapElement) {
+        console.error('Map element not found')
+        return
+      }
 
-      // Haritayı oluştur
-      map.value = L.map(mapElement, {
-        center: [41.0082, 28.9784],
-        zoom: 12,
-        zoomControl: true
-      })
+      try {
+        // Haritayı oluştur
+        map.value = L.map(mapElement, {
+          center: [35.34, 33.32],
+          zoom: 12,
+          zoomControl: true,
+          attributionControl: true
+        })
 
-      // OpenStreetMap tile layer ekle
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19
-      }).addTo(map.value)
+        // OpenStreetMap tile layer ekle
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors',
+          maxZoom: 19
+        }).addTo(map.value)
 
-      // Haritaya tıklandığında
-      map.value.on('click', (e) => {
-        const { lat, lng } = e.latlng
-        updateMarker(lat, lng)
-        updateCoordinates(lat, lng)
-        reverseGeocode(lat, lng)
-      })
+        // Haritayı yeniden boyutlandır
+        setTimeout(() => {
+          map.value.invalidateSize()
+        }, 100)
+
+        // Haritaya tıklandığında
+        map.value.on('click', (e) => {
+          const { lat, lng } = e.latlng
+          updateMarker(lat, lng)
+          updateCoordinates(lat, lng)
+          reverseGeocode(lat, lng)
+        })
+
+        console.log('Branch map initialized successfully')
+      } catch (error) {
+        console.error('Error initializing branch map:', error)
+      }
     }
 
     // Marker'ı güncelle
     const updateMarker = (lat, lng) => {
-      if (!map.value) return;
-      if (marker.value) {
-        marker.value.setLatLng([lat, lng]);
-      } else {
-        marker.value = L.marker([lat, lng], { draggable: true }).addTo(map.value);
+      if (!map.value) {
+        console.warn('Map not initialized yet, skipping marker update')
+        return
+      }
+      
+      try {
+        if (marker.value) {
+          marker.value.setLatLng([lat, lng])
+        } else {
+          marker.value = L.marker([lat, lng], { draggable: true }).addTo(map.value)
+          
+          // Marker sürüklendiğinde
+          marker.value.on('dragend', (e) => {
+            const { lat, lng } = e.target.getLatLng()
+            updateCoordinates(lat, lng)
+            reverseGeocode(lat, lng)
+          })
+        }
+      } catch (error) {
+        console.error('Error updating marker:', error)
       }
     }
 
@@ -272,8 +296,12 @@ export default {
           const latNum = parseFloat(lat)
           const lngNum = parseFloat(lon)
           
-          map.value.setView([latNum, lngNum], 15)
-          updateMarker(latNum, lngNum)
+          // Harita yüklenmişse güncelle
+          if (map.value) {
+            map.value.setView([latNum, lngNum], 15)
+            updateMarker(latNum, lngNum)
+          }
+          
           updateCoordinates(latNum, lngNum)
         }
       } catch (error) {
@@ -323,10 +351,20 @@ export default {
         transportation: branch.transportation || '',
         social_facilities: branch.social_facilities || ''
       }
-      showModal()
-      await nextTick();
-      if (map.value) {
-        updateMarker(branch.latitude, branch.longitude);
+      
+      await showModal()
+      
+      // Haritayı güncelle - nextTick ile haritanın hazır olmasını bekle
+      if (branch.latitude && branch.longitude) {
+        await nextTick()
+        if (map.value) {
+          const lat = parseFloat(branch.latitude)
+          const lng = parseFloat(branch.longitude)
+          map.value.setView([lat, lng], 15)
+          updateMarker(lat, lng)
+        } else {
+          console.warn('Map not ready for branch editing')
+        }
       }
     }
 
@@ -385,7 +423,8 @@ export default {
 
     // Şube silme
     const deleteBranch = async (id) => {
-      if (confirm('Bu şubeyi silmek istediğinizden emin misiniz?')) {
+      const confirmed = await toast.confirm('Bu şubeyi silmek istediğinizden emin misiniz?', 'Şube Silme')
+      if (confirmed) {
         try {
           await axios.delete(`/api/branches/${id}`)
           showSuccess('Şube başarıyla silindi')
@@ -426,21 +465,28 @@ export default {
 
     // Bildirim fonksiyonları
     const showSuccess = (message) => {
-      alert(message)
+      toast.success(message)
     }
 
     const showError = (message) => {
-      alert(message)
+      toast.error(message)
     }
 
     // Modal açıldığında haritayı başlat
     const showModal = async () => {
       showAddModal.value = true
       await nextTick()
-      if (!map.value) {
-        initMap()
-      } else {
-        map.value.invalidateSize()
+      
+      try {
+        if (!map.value) {
+          initMap()
+          // Haritanın yüklenmesi için kısa bir bekleme
+          await new Promise(resolve => setTimeout(resolve, 100))
+        } else {
+          map.value.invalidateSize()
+        }
+      } catch (error) {
+        console.error('Error handling map in branch modal:', error)
       }
     }
 
@@ -493,9 +539,6 @@ export default {
       editingBranch,
       selectedBranch,
       branchForm,
-      countryList,
-      cityList,
-      districtList,
       editBranch,
       saveBranch,
       deleteBranch,
@@ -854,19 +897,170 @@ th {
   background-color: #f8f9fa !important;
 }
 
-/* Responsive tasarım */
+/* Mobil Responsive Tasarım */
 @media (max-width: 768px) {
+  .branches-page {
+    padding: 10px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .header-actions button {
+    padding: 12px 16px;
+    font-size: 14px;
+    min-height: 44px;
+  }
+
+  /* Tablo mobil görünümü */
+  .branches-list {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    min-width: 700px;
+    font-size: 12px;
+  }
+
+  th, td {
+    padding: 8px 4px;
+    min-width: 80px;
+  }
+
+  /* Modal mobil optimizasyonu */
+  .modal-content {
+    width: 95% !important;
+    margin: 10px !important;
+    max-height: 95vh;
+  }
+
+  .modal-header {
+    padding: 15px;
+  }
+
+  .modal-header h3 {
+    font-size: 1.2rem;
+  }
+
+  .branch-form {
+    padding: 15px;
+  }
+
   .form-row {
     grid-template-columns: 1fr;
+    gap: 15px;
+    margin-bottom: 15px;
+  }
+
+  .form-group {
+    margin-bottom: 15px;
+  }
+
+  .form-group label {
+    font-size: 14px;
+  }
+
+  .form-group input,
+  .form-group textarea {
+    padding: 12px;
+    font-size: 16px; /* iOS zoom'u engellemek için */
+    border-radius: 6px;
+  }
+
+  /* Harita mobil optimizasyonu */
+  .map-container {
+    height: 250px;
+    margin: 15px 0;
+  }
+
+  #map {
+    height: 100%;
   }
 
   .coordinates {
     grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .coordinates-display {
+    padding: 12px;
+    margin-top: 15px;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 20px;
+    padding-top: 15px;
+  }
+
+  .form-actions button {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .help-text {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .branches-page {
+    padding: 5px;
+  }
+
+  .page-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .header-actions {
+    grid-template-columns: 1fr;
+  }
+
+  table {
+    font-size: 11px;
+    min-width: 600px;
+  }
+
+  th, td {
+    padding: 6px 2px;
   }
 
   .modal-content {
-    width: 95%;
-    margin: 10px;
+    margin: 5px !important;
+  }
+
+  .modal-header {
+    padding: 10px;
+  }
+
+  .branch-form {
+    padding: 10px;
+  }
+
+  .map-container {
+    height: 200px;
+  }
+
+  .coordinates-display {
+    padding: 10px;
+  }
+
+  .coordinate-item {
+    padding: 8px;
   }
 }
 </style> 

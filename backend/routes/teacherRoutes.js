@@ -4,6 +4,7 @@ const db = require('../config/db');
 const { verifyToken, checkRole } = require('../middleware/auth');
 const bcrypt = require('bcrypt');
 const { addTeacher, updateTeacher } = require('../controllers/userController');
+const upload = require('../middleware/upload');
 
 // Öğretmenin kendi profilini güncellemesi
 router.put('/profile', verifyToken, async (req, res) => {
@@ -141,22 +142,19 @@ router.get('/students', verifyToken, async (req, res) => {
         );
 
         if (teacherResult.length === 0) {
-            console.log('Öğretmen bulunamadı:', req.user.id);
+    
             return res.status(404).json({ error: 'Öğretmen bulunamadı' });
         }
 
         const teacherId = teacherResult[0].id;
-        console.log('Öğretmen ID:', teacherId);
+
 
         // Öğretmenin kurslarını kontrol et
         const [courses] = await db.pool.query(
             'SELECT id, name FROM courses WHERE teacher_id = ?',
             [teacherId]
         );
-        console.log('Öğretmenin kursları:', courses);
-
-        if (courses.length === 0) {
-            console.log('Öğretmenin kursu bulunamadı');
+                if (courses.length === 0) {
             return res.json([]);
         }
 
@@ -165,6 +163,7 @@ router.get('/students', verifyToken, async (req, res) => {
             SELECT DISTINCT 
                 s.id,
                 s.user_id,
+                s.image_path,
                 u.name,
                 u.email,
                 u.phone,
@@ -175,7 +174,7 @@ router.get('/students', verifyToken, async (req, res) => {
             JOIN student_courses e ON s.id = e.student_id
             JOIN courses c ON e.course_id = c.id
             WHERE c.teacher_id = ?
-            GROUP BY s.id, s.user_id, u.name, u.email, u.phone
+            GROUP BY s.id, s.user_id, s.image_path, u.name, u.email, u.phone
         `, [teacherId]);
 
         console.log('Bulunan öğrenci sayısı:', students.length);
@@ -184,6 +183,7 @@ router.get('/students', verifyToken, async (req, res) => {
         // Kurs isimlerini diziye çevir
         const formattedStudents = students.map(student => ({
             ...student,
+            courses: student.enrolled_courses ? student.enrolled_courses.split(',').map(name => ({ name: name.trim() })) : [],
             enrolled_courses: student.enrolled_courses ? student.enrolled_courses.split(',') : [],
             course_ids: student.course_ids ? student.course_ids.split(',').map(Number) : []
         }));
@@ -308,6 +308,61 @@ router.get('/:id/students', verifyToken, async (req, res) => {
 // Öğretmen ekleme
 router.post('/', verifyToken, addTeacher);
 
+// Öğretmen resim yükleme
+router.post('/:id/image', verifyToken, checkRole(['admin']), upload.single('image'), async (req, res) => {
+    try {
+        const teacherId = req.params.id;
+        
+        console.log('=== ÖĞRETMEN RESİM YÜKLEME DEBUG ===');
+        console.log('Teacher ID:', teacherId);
+        console.log('Uploaded file:', req.file);
+        
+        if (!req.file) {
+            return res.status(400).json({ error: 'Resim yüklenmedi' });
+        }
+
+        const imagePath = `/uploads/${req.file.filename}`;
+        console.log('Image path to save:', imagePath);
+        
+        // Öğretmenin var olup olmadığını kontrol et
+        const [teacherExists] = await db.pool.query(
+            'SELECT id FROM teachers WHERE id = ?',
+            [teacherId]
+        );
+        
+        console.log('Teacher exists check:', teacherExists);
+        
+        if (teacherExists.length === 0) {
+            return res.status(404).json({ error: 'Öğretmen bulunamadı' });
+        }
+        
+        // Veritabanında teachers tablosunda image_path alanını güncelle
+        const [updateResult] = await db.pool.query(
+            'UPDATE teachers SET image_path = ? WHERE id = ?',
+            [imagePath, teacherId]
+        );
+        
+        console.log('Update result:', updateResult);
+
+        // Güncellenmiş öğretmen bilgilerini getir
+        const [updatedTeacher] = await db.pool.query(
+            'SELECT * FROM teachers WHERE id = ?', 
+            [teacherId]
+        );
+        
+        console.log('Updated teacher data:', updatedTeacher[0]);
+
+        res.json({ 
+            message: 'Resim başarıyla yüklendi',
+            image_path: imagePath,
+            teacher: updatedTeacher[0]
+        });
+    } catch (error) {
+        console.error('Error uploading teacher image:', error);
+        res.status(500).json({ error: 'Sunucu hatası: ' + error.message });
+    }
+});
+
 // Öğretmen güncelleme
 router.put('/:id', verifyToken, async (req, res) => {
     if (req.user.role !== 'admin') {
@@ -322,12 +377,14 @@ router.put('/:id', verifyToken, async (req, res) => {
         languages, 
         working_days,
         working_hours,
-        branch_id 
+        branch_id,
+        image_path
     } = req.body;
 
     // Debug logları - Gelen veri
     console.log('=== ÖĞRETMEN GÜNCELLEME - GELEN VERİ ===');
     console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log('Gelen diller:', languages);
 
     try {
         // Önce öğretmeni ve user_id'sini bul
@@ -380,14 +437,55 @@ router.put('/:id', verifyToken, async (req, res) => {
 
             // Öğretmen bilgilerini güncelle
             await connection.query(
-                'UPDATE teachers SET working_days = ?, working_hours = ?, branch_id = ? WHERE id = ?',
+                'UPDATE teachers SET working_days = ?, working_hours = ?, branch_id = ?, image_path = ? WHERE id = ?',
                 [
                     JSON.stringify(workingDaysData), 
                     JSON.stringify(workingHoursData), 
                     branch_id,
+                    image_path || null,
                     teacherId
                 ]
             );
+
+            // Dilleri güncelle
+            if (languages && Array.isArray(languages)) {
+                console.log('Diller güncelleniyor:', languages);
+                
+                // Önce mevcut dilleri temizle
+                await connection.query(
+                    'DELETE FROM teacher_languages WHERE teacher_id = ?',
+                    [teacherId]
+                );
+
+                // Dil adlarını ID'lere çevir ve ekle
+                for (const languageName of languages) {
+                    // Önce dilin ID'sini bul veya ekle
+                    let [languageResult] = await connection.query(
+                        'SELECT id FROM languages WHERE name = ?',
+                        [languageName]
+                    );
+
+                    let languageId;
+                    if (languageResult.length === 0) {
+                        // Dil yoksa ekle
+                        const [insertResult] = await connection.query(
+                            'INSERT INTO languages (name) VALUES (?)',
+                            [languageName]
+                        );
+                        languageId = insertResult.insertId;
+                        console.log('Yeni dil eklendi:', languageName, 'ID:', languageId);
+                    } else {
+                        languageId = languageResult[0].id;
+                    }
+
+                    // Öğretmen-dil ilişkisini ekle
+                    await connection.query(
+                        'INSERT INTO teacher_languages (teacher_id, language_id) VALUES (?, ?)',
+                        [teacherId, languageId]
+                    );
+                    console.log('Öğretmene dil eklendi:', languageName, 'ID:', languageId);
+                }
+            }
 
             // Güncellenen veriyi doğrula
             const [verifyData] = await connection.query(

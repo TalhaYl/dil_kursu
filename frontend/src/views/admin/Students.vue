@@ -23,7 +23,7 @@
             <th>
               <input type="checkbox" v-model="selectAll" @change="toggleSelectAll">
             </th>
-            <th>ID</th>
+            <th>Fotoğraf</th>
             <th>Ad Soyad</th>
             <th>E-posta</th>
             <th>Telefon</th>
@@ -31,15 +31,28 @@
             <th>Şube</th>
             <th>Durum</th>
             <th>Kurslar</th>
-            <th>İşlemler</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="student in students" :key="student.id">
-            <td>
+          <tr v-for="student in students" :key="student.id" 
+              :class="{ 'selected': selectedStudents.includes(student.id) }"
+              @click="toggleStudentSelection(student.id)">
+            <td @click.stop>
               <input type="checkbox" v-model="selectedStudents" :value="student.id">
             </td>
-            <td>{{ student.id }}</td>
+            <td>
+              <div class="student-photo">
+                <img 
+                  v-if="student.image_path" 
+                  :src="`http://localhost:3000${student.image_path}`" 
+                  :alt="student.name"
+                  class="student-avatar"
+                />
+                <div v-else class="no-photo">
+                  <i class="fas fa-user"></i>
+                </div>
+              </div>
+            </td>
             <td>{{ student.name }}</td>
             <td>{{ student.email }}</td>
             <td>{{ student.phone }}</td>
@@ -57,17 +70,6 @@
                 </span>
                 <span v-if="!student.courses">Kurs yok</span>
               </div>
-            </td>
-            <td>
-              <button class="edit-btn" @click="editStudent(student)">
-                <i class="fas fa-edit"></i>
-              </button>
-              <button class="course-btn" @click="openCourseModal(student)">
-                <i class="fas fa-graduation-cap"></i>
-              </button>
-              <button class="delete-btn" @click="deleteStudent(student)">
-                <i class="fas fa-trash"></i>
-              </button>
             </td>
           </tr>
         </tbody>
@@ -87,6 +89,15 @@
           <div class="form-group">
             <label>E-posta <span class="required">*</span></label>
             <input type="email" v-model="studentForm.email" required>
+          </div>
+
+          <div class="form-group" v-if="!editingStudent">
+            <label>Şifre</label>
+            <input type="password" v-model="studentForm.password" placeholder="Boş bırakılırsa otomatik oluşturulur">
+            <small class="help-text">
+              <i class="fas fa-info-circle"></i>
+              Şifre boş bırakılırsa varsayılan şifre "123456" olarak ayarlanır.
+            </small>
           </div>
           
           <div class="form-group">
@@ -158,7 +169,7 @@
             </div>
           </div>
 
-          <div class="form-group" v-if="editingStudent">
+          <div class="form-group">
             <label>Durum</label>
             <select v-model="studentForm.status">
               <option value="active">Aktif</option>
@@ -240,6 +251,9 @@ import { ref, onMounted, computed, nextTick } from 'vue'
 import axios from 'axios'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import toast from '@/utils/toast'
+import ImageUploader from '@/components/ImageUploader.vue'
+import branchIconPng from '@/assets/images/a.png'
 
 // Leaflet marker icon düzeltmesi
 import icon from 'leaflet/dist/images/marker-icon.png'
@@ -256,6 +270,9 @@ L.Marker.prototype.options.icon = DefaultIcon
 
 export default {
   name: 'StudentsView',
+  components: {
+    ImageUploader
+  },
   setup() {
     const students = ref([])
     const branches = ref([])
@@ -267,9 +284,11 @@ export default {
     const selectedCourse = ref('')
     const map = ref(null)
     const marker = ref(null)
+    const branchMarkers = ref([])
     const studentForm = ref({
       name: '',
       email: '',
+      password: '',
       phone: '',
       address: '',
       branch_id: '',
@@ -294,7 +313,7 @@ export default {
       try {
         // Haritayı oluştur
         map.value = L.map(mapElement, {
-          center: [41.0082, 28.9784],
+          center: [35.34, 33.32],
           zoom: 12,
           zoomControl: true,
           attributionControl: true
@@ -305,6 +324,9 @@ export default {
           attribution: '© OpenStreetMap contributors',
           maxZoom: 19
         }).addTo(map.value)
+
+        // Şube markerlarını ekle
+        addBranchMarkers();
 
         // Haritayı yeniden boyutlandır
         setTimeout(() => {
@@ -323,6 +345,48 @@ export default {
       } catch (error) {
         console.error('Error initializing map:', error)
       }
+    }
+
+    // Şube markerlarını ekle
+    const addBranchMarkers = () => {
+      // Harita yüklenmemişse çık
+      if (!map.value) {
+        console.warn('Map not initialized yet, skipping branch markers')
+        return
+      }
+
+      // Önce eski markerları temizle
+      if (branchMarkers.value.length > 0) {
+        branchMarkers.value.forEach(m => {
+          try {
+            m.remove()
+          } catch (error) {
+            console.warn('Error removing branch marker:', error)
+          }
+        })
+        branchMarkers.value = []
+      }
+
+      if (!branches.value) return
+
+      branches.value.forEach(branch => {
+        if (branch.latitude && branch.longitude) {
+          try {
+            const icon = L.icon({
+              iconUrl: branchIconPng,
+              iconSize: [32, 32],
+              iconAnchor: [16, 32],
+              popupAnchor: [0, -32]
+            })
+            const m = L.marker([parseFloat(branch.latitude), parseFloat(branch.longitude)], { icon })
+              .addTo(map.value)
+              .bindPopup(branch.name)
+            branchMarkers.value.push(m)
+          } catch (error) {
+            console.error('Error adding branch marker:', error)
+          }
+        }
+      })
     }
 
     // Yardımcı: İki nokta arası mesafe (Haversine)
@@ -372,6 +436,7 @@ export default {
     // Adres arama fonksiyonunu güncelle
     const searchAddress = async () => {
       if (!studentForm.value.address) return
+      
       try {
         const response = await fetch(
           `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(studentForm.value.address)}&countrycodes=tr`
@@ -381,8 +446,13 @@ export default {
           const { lat, lon } = data[0]
           const latNum = parseFloat(lat)
           const lngNum = parseFloat(lon)
-          map.value.setView([latNum, lngNum], 15)
-          updateMarker(latNum, lngNum)
+          
+          // Harita yüklenmişse güncelle
+          if (map.value) {
+            map.value.setView([latNum, lngNum], 15)
+            updateMarker(latNum, lngNum)
+          }
+          
           updateCoordinates(latNum, lngNum)
           // Adres değiştiğinde otomatik şube ata
           autoSelectBranch()
@@ -403,34 +473,64 @@ export default {
     const showModal = async () => {
       showAddModal.value = true
       await nextTick()
+      
       if (studentFormRef.value) {
         studentFormRef.value.scrollTo({ top: 0, behavior: 'auto' })
       }
-      if (!map.value) {
-        initMap()
-      } else {
-        map.value.invalidateSize()
+      
+      try {
+        if (!map.value) {
+          initMap()
+          // Haritanın yüklenmesi için kısa bir bekleme
+          await new Promise(resolve => setTimeout(resolve, 100))
+        } else {
+          map.value.invalidateSize()
+        }
+        
+        // Harita hazır olduktan sonra şube markerlarını ekle
+        if (map.value) {
+          addBranchMarkers()
+        }
+      } catch (error) {
+        console.error('Error handling map in modal:', error)
       }
+      
       // Modal açıldığında otomatik şube ata
       autoSelectBranch()
     }
 
     // Marker'ı güncelle
     const updateMarker = (lat, lng) => {
-      if (marker.value) {
-        map.value.removeLayer(marker.value)
+      // Harita yüklenmemişse çık
+      if (!map.value) {
+        console.warn('Map not initialized yet, skipping marker update')
+        return
       }
 
-      marker.value = L.marker([lat, lng], {
-        draggable: true
-      }).addTo(map.value)
+      // Eski marker'ı kaldır
+      if (marker.value) {
+        try {
+          map.value.removeLayer(marker.value)
+        } catch (error) {
+          console.warn('Error removing old marker:', error)
+        }
+      }
 
-      // Marker sürüklendiğinde
-      marker.value.on('dragend', (e) => {
-        const { lat, lng } = e.target.getLatLng()
-        updateCoordinates(lat, lng)
-        reverseGeocode(lat, lng)
-      })
+      try {
+        // Yeni marker ekle
+        marker.value = L.marker([lat, lng], {
+          draggable: true
+        }).addTo(map.value)
+
+        // Marker sürüklendiğinde
+        marker.value.on('dragend', (e) => {
+          const { lat, lng } = e.target.getLatLng()
+          updateCoordinates(lat, lng)
+          reverseGeocode(lat, lng)
+        })
+      } catch (error) {
+        console.error('Error creating marker:', error)
+      }
     }
 
     // Koordinattan adres bulma
@@ -451,11 +551,11 @@ export default {
 
     // Bildirim fonksiyonları
     const showSuccess = (message) => {
-      alert(message)
+      toast.success(message)
     }
 
     const showError = (message) => {
-      alert(message)
+      toast.error(message)
     }
 
     // Seçili öğrenci var mı kontrolü
@@ -467,6 +567,16 @@ export default {
         selectedStudents.value = students.value.map(student => student.id)
       } else {
         selectedStudents.value = []
+      }
+    }
+
+    // Öğrenci seçimi toggle
+    const toggleStudentSelection = (studentId) => {
+      const index = selectedStudents.value.indexOf(studentId)
+      if (index > -1) {
+        selectedStudents.value.splice(index, 1)
+      } else {
+        selectedStudents.value.push(studentId)
       }
     }
 
@@ -484,7 +594,8 @@ export default {
 
     // Seçili öğrencileri sil
     const deleteSelectedStudents = async () => {
-      if (!confirm(`${selectedStudents.value.length} öğrenciyi silmek istediğinizden emin misiniz?`)) return
+      const confirmed = await toast.confirm(`${selectedStudents.value.length} öğrenciyi silmek istediğinizden emin misiniz?`, 'Öğrenci Silme')
+      if (!confirmed) return
 
       try {
         for (const studentId of selectedStudents.value) {
@@ -532,7 +643,7 @@ export default {
     }
 
     // Öğrenci düzenleme
-    const editStudent = (student) => {
+    const editStudent = async (student) => {
       editingStudent.value = student
       studentForm.value = {
         name: student.name,
@@ -549,13 +660,21 @@ export default {
         longitude: student.longitude || '',
         image_path: student.image_path || ''
       }
-      showModal()
-      // Haritayı güncelle
+      
+      await showModal()
+      
+      // Haritayı güncelle - nextTick ile haritanın hazır olmasını bekle
       if (student.latitude && student.longitude) {
-        const lat = parseFloat(student.latitude)
-        const lng = parseFloat(student.longitude)
-        map.value?.setView([lat, lng], 15)
-        updateMarker(lat, lng)
+        await nextTick()
+        // Harita var mı kontrol et
+        if (map.value) {
+          const lat = parseFloat(student.latitude)
+          const lng = parseFloat(student.longitude)
+          map.value.setView([lat, lng], 15)
+          updateMarker(lat, lng)
+        } else {
+          console.warn('Map not ready for student editing')
+        }
       }
     }
 
@@ -583,7 +702,7 @@ export default {
       } catch (error) {
         console.error('Error adding course:', error)
         if (error.response?.data?.error) {
-          alert(error.response.data.error)
+          toast.error(error.response.data.error)
         }
       }
     }
@@ -599,7 +718,7 @@ export default {
       } catch (error) {
         console.error('Error removing course:', error)
         if (error.response?.data?.error) {
-          alert(error.response.data.error)
+          toast.error(error.response.data.error)
         }
       }
     }
@@ -642,10 +761,14 @@ export default {
         const studentData = {
           name: studentForm.value.name,
           email: studentForm.value.email,
+          password: studentForm.value.password || undefined, // Boşsa undefined gönder
           phone: studentForm.value.phone,
           address: studentForm.value.address,
           branch_id: studentForm.value.branch_id,
           course_ids: studentForm.value.course_ids,
+          status: studentForm.value.status,
+          latitude: studentForm.value.latitude,
+          longitude: studentForm.value.longitude,
           image_path: studentForm.value.image_path || null // Resim yolunu ekle
         };
 
@@ -659,7 +782,13 @@ export default {
           // Yeni kayıt
           const response = await axios.post('/api/students', studentData);
           console.log('Backend response:', response.data); // Debug için
-          showSuccess('Öğrenci başarıyla eklendi');
+          
+          // Varsayılan şifre bilgisi varsa göster
+          if (response.data.temporaryPassword) {
+            showSuccess(`Öğrenci başarıyla eklendi. Şifre: ${response.data.temporaryPassword}`);
+          } else {
+            showSuccess('Öğrenci başarıyla eklendi');
+          }
         }
 
         await fetchStudents();
@@ -676,6 +805,7 @@ export default {
       studentForm.value = {
         name: '',
         email: '',
+        password: '',
         phone: '',
         address: '',
         branch_id: '',
@@ -689,7 +819,8 @@ export default {
 
     // Öğrenci silme
     const deleteStudent = async (student) => {
-      if (!confirm('Bu öğrenciyi silmek istediğinizden emin misiniz?')) return
+      const confirmed = await toast.confirm('Bu öğrenciyi silmek istediğinizden emin misiniz?', 'Öğrenci Silme')
+      if (!confirmed) return
       
       try {
         await axios.delete(`/api/students/${student.id}`)
@@ -710,7 +841,7 @@ export default {
 
     // Resim yükleme URL'sini düzelt
     const getImageUploadUrl = (studentId) => {
-      if (!studentId) {
+      if (!studentId || studentId === 'new') {
         return '/api/students/temp/image';
       }
       return `/api/students/${studentId}/image`;
@@ -752,6 +883,7 @@ export default {
       selectAll,
       hasSelectedStudents,
       toggleSelectAll,
+      toggleStudentSelection,
       editSelectedStudents,
       deleteSelectedStudents,
       isFormValid,
@@ -842,6 +974,19 @@ th, td {
 th {
   background-color: #f8f9fa;
   font-weight: 600;
+}
+
+tr {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+tr:hover {
+  background-color: #f8f9fa;
+}
+
+tr.selected {
+  background-color: #e3f2fd !important;
 }
 
 .edit-btn, .delete-btn {
@@ -1164,5 +1309,196 @@ th {
 
 .coordinate-item i {
   color: #4CAF50;
+}
+
+.student-photo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.student-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e0e0e0;
+}
+
+.no-photo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #f5f5f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+  border: 2px solid #e0e0e0;
+}
+
+/* Mobil Responsive Tasarım */
+@media (max-width: 768px) {
+  .students-page {
+    padding: 10px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .header-actions button {
+    padding: 12px 16px;
+    font-size: 14px;
+    min-height: 44px;
+  }
+
+  /* Tablo mobil görünümü */
+  .students-list {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    min-width: 900px;
+    font-size: 12px;
+  }
+
+  th, td {
+    padding: 8px 4px;
+    min-width: 80px;
+  }
+
+  .student-avatar {
+    width: 30px;
+    height: 30px;
+  }
+
+  .no-photo {
+    width: 30px;
+    height: 30px;
+  }
+
+  /* Modal mobil optimizasyonu */
+  .modal-content {
+    width: 95% !important;
+    max-width: 95% !important;
+    margin: 10px;
+    padding: 15px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .modal-content h3 {
+    font-size: 1.2rem;
+    margin-bottom: 15px;
+  }
+
+  .form-group {
+    margin-bottom: 12px;
+  }
+
+  .form-group label {
+    font-size: 14px;
+  }
+
+  .form-group input,
+  .form-group textarea,
+  .form-group select {
+    padding: 12px;
+    font-size: 16px; /* iOS zoom'u engellemek için */
+    border-radius: 6px;
+  }
+
+  /* Harita mobil optimizasyonu */
+  .map-container {
+    height: 250px;
+    margin: 15px 0;
+  }
+
+  #map {
+    height: 100%;
+  }
+
+  .coordinates {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .courses-selection {
+    grid-template-columns: 1fr;
+    max-height: 150px;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .form-actions button {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  /* Kurs yönetimi modal */
+  .course-management {
+    margin-bottom: 15px;
+  }
+
+  .add-course {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .add-course-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .students-page {
+    padding: 5px;
+  }
+
+  .page-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .header-actions {
+    grid-template-columns: 1fr;
+  }
+
+  table {
+    font-size: 11px;
+    min-width: 700px;
+  }
+
+  th, td {
+    padding: 6px 2px;
+  }
+
+  .modal-content {
+    padding: 10px;
+  }
+
+  .map-container {
+    height: 200px;
+  }
+
+  .help-text {
+    font-size: 12px;
+  }
 }
 </style> 

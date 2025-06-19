@@ -59,6 +59,7 @@
 <script>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import toast from '@/utils/toast'
 
 export default {
   name: 'AboutView',
@@ -98,15 +99,16 @@ export default {
 
     const deleteAbout = async () => {
       if (!aboutData.value) return
-      if (!confirm('Hakkımızda sayfasını silmek istediğinizden emin misiniz?')) return
+      const confirmed = await toast.confirm('Hakkımızda sayfasını silmek istediğinizden emin misiniz?', 'Sayfa Silme')
+      if (!confirmed) return
       
       try {
         await axios.delete('/api/about')
         aboutData.value = null
-        alert('Hakkımızda sayfası başarıyla silindi!')
+        toast.success('Hakkımızda sayfası başarıyla silindi!')
       } catch (error) {
         console.error('Error deleting about page:', error)
-        alert('Silme işlemi sırasında bir hata oluştu!')
+        toast.error('Silme işlemi sırasında bir hata oluştu!')
       }
     }
 
@@ -132,10 +134,10 @@ export default {
         }
         await fetchAboutData()
         showModal.value = false
-        alert(isEditing.value ? 'Hakkımızda sayfası başarıyla güncellendi!' : 'Yeni hakkımızda sayfası başarıyla eklendi!')
+        toast.success(isEditing.value ? 'Hakkımızda sayfası başarıyla güncellendi!' : 'Yeni hakkımızda sayfası başarıyla eklendi!')
       } catch (error) {
         console.error('Error saving about page:', error)
-        alert('Kaydetme sırasında bir hata oluştu!')
+        toast.error('Kaydetme sırasında bir hata oluştu!')
       }
     }
 
@@ -298,5 +300,122 @@ export default {
   background-color: #4CAF50;
   color: white;
   border: none;
+}
+
+/* Mobil Responsive Tasarım */
+@media (max-width: 768px) {
+  .about-management {
+    padding: 10px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+  }
+
+  .header-actions button {
+    padding: 12px 16px;
+    font-size: 14px;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .about-content {
+    padding: 15px;
+  }
+
+  .content-section {
+    margin-bottom: 15px;
+  }
+
+  .content-section h4 {
+    font-size: 1.1rem;
+  }
+
+  .content-section p {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* Modal mobil optimizasyonu */
+  .modal-content {
+    width: 95% !important;
+    max-width: 95% !important;
+    margin: 10px;
+    padding: 15px;
+  }
+
+  .form-group {
+    margin-bottom: 12px;
+  }
+
+  .form-group label {
+    font-size: 14px;
+  }
+
+  .form-group input,
+  .form-group textarea {
+    padding: 12px;
+    font-size: 16px; /* iOS zoom'u engellemek için */
+    border-radius: 6px;
+  }
+
+  .form-group textarea {
+    min-height: 120px;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 15px;
+  }
+
+  .form-actions button {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 480px) {
+  .about-management {
+    padding: 5px;
+  }
+
+  .page-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .header-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .about-content {
+    padding: 12px;
+  }
+
+  .content-section h4 {
+    font-size: 1rem;
+  }
+
+  .content-section p {
+    font-size: 13px;
+  }
+
+  .modal-content {
+    padding: 10px;
+  }
+
+  .form-group textarea {
+    min-height: 100px;
+  }
 }
 </style> 

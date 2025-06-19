@@ -8,7 +8,7 @@ const upload = require('../middleware/upload');
 const branchController = require('../controllers/branchController');
 
 // Tüm kursları getir
-router.get('/', verifyToken, courseController.getAllCourses);
+router.get('/', courseController.getAllCourses);
 
 // Şubeye göre sınıfları getir
 router.get('/classrooms/:branchId', verifyToken, courseController.getClassroomsByBranch);
@@ -132,14 +132,12 @@ router.get('/available-classrooms/:branch_id/:day/:time', verifyToken, async (re
 
                 return true;
             } catch (error) {
-                console.error('Error checking classroom availability:', error);
                 return false;
             }
         });
 
         res.json(availableClassrooms);
     } catch (error) {
-        console.error('Error fetching available classrooms:', error);
         res.status(500).json({ error: 'Sunucu hatası' });
     }
 });
@@ -153,7 +151,6 @@ router.post('/temp/image', verifyToken, checkRole(['admin']), upload.single('ima
         const imagePath = `/uploads/${req.file.filename}`;
         res.json({ image_path: imagePath });
     } catch (error) {
-        console.error('Error uploading temporary course image:', error);
         res.status(500).json({ error: 'Sunucu hatası: ' + error.message });
     }
 });
@@ -176,7 +173,6 @@ router.post('/:id/image', verifyToken, checkRole(['admin']), upload.single('imag
         const [updatedCourse] = await db.pool.query('SELECT * FROM courses WHERE id = ?', [courseId]);
         res.json(updatedCourse[0]);
     } catch (error) {
-        console.error('Error uploading course image:', error);
         res.status(500).json({ error: 'Sunucu hatası: ' + error.message });
     }
 });
@@ -227,7 +223,6 @@ router.get('/teacher-hours/:teacherId', verifyToken, async (req, res) => {
             workingDays = typeof teacher.working_days === 'string' ? 
                 JSON.parse(teacher.working_days) : (teacher.working_days || {});
         } catch (e) {
-            console.error('Error parsing working_days:', e);
             workingDays = {};
         }
 
@@ -235,7 +230,6 @@ router.get('/teacher-hours/:teacherId', verifyToken, async (req, res) => {
             workingHours = typeof teacher.working_hours === 'string' ? 
                 JSON.parse(teacher.working_hours) : (teacher.working_hours || {});
         } catch (e) {
-            console.error('Error parsing working_hours:', e);
             workingHours = {};
         }
 
@@ -245,12 +239,10 @@ router.get('/teacher-hours/:teacherId', verifyToken, async (req, res) => {
                     try {
                         return JSON.parse(s);
                     } catch (e) {
-                        console.error('Error parsing schedule:', e);
                         return null;
                     }
                 }).filter(Boolean) : [];
         } catch (e) {
-            console.error('Error parsing current_schedules:', e);
             currentSchedules = [];
         }
 
@@ -280,7 +272,6 @@ router.get('/teacher-hours/:teacherId', verifyToken, async (req, res) => {
             available_hours: availableHours
         });
     } catch (error) {
-        console.error('Error fetching teacher hours:', error);
         res.status(500).json({ error: 'Sunucu hatası' });
     }
 });

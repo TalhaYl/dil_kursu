@@ -73,6 +73,7 @@
 <script>
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import toast from '@/utils/toast'
 
 export default {
   name: 'AdminDashboard',
@@ -100,6 +101,7 @@ export default {
     
     const handleLogout = () => {
       localStorage.removeItem('auth_token')
+      toast.info('Başarıyla çıkış yapıldı.', 'Çıkış')
       router.push('/login')
     }
 
@@ -267,6 +269,130 @@ export default {
   flex: 1;
   padding: 30px;
   overflow-y: auto;
+}
+
+/* Mobil Responsive Tasarım */
+@media (max-width: 768px) {
+  .admin-dashboard {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: auto;
+    order: 2;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background-color: #1e293b;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+  }
+
+  .sidebar-header {
+    display: none;
+  }
+
+  .sidebar nav {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: visible;
+    padding: 5px 0;
+  }
+
+  .nav-section {
+    display: flex;
+    margin: 0;
+  }
+
+  .section-title {
+    display: none;
+  }
+
+  .sidebar nav a {
+    flex-direction: column;
+    padding: 8px 12px;
+    font-size: 12px;
+    min-width: 70px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .sidebar nav a i {
+    margin-right: 0;
+    margin-bottom: 4px;
+    font-size: 16px;
+  }
+
+  .sidebar-footer {
+    display: none;
+  }
+
+  .main-content {
+    order: 1;
+    padding-bottom: 80px; /* Sidebar'ın yüksekliği kadar */
+  }
+
+  .header {
+    padding: 0 15px;
+    height: 60px;
+  }
+
+  .header h1 {
+    font-size: 1.3rem;
+  }
+
+  .content-container {
+    padding: 15px;
+  }
+
+  .user-avatar-icon {
+    font-size: 32px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 0 10px;
+    height: 50px;
+  }
+
+  .header h1 {
+    font-size: 1.2rem;
+  }
+
+  .content-container {
+    padding: 10px;
+  }
+
+  .sidebar nav a {
+    padding: 6px 8px;
+    font-size: 10px;
+    min-width: 60px;
+  }
+
+  .sidebar nav a i {
+    font-size: 14px;
+  }
+
+  .user-avatar-icon {
+    font-size: 28px;
+  }
+}
+
+/* Ekstra küçük ekranlar için horizontal scroll */
+@media (max-width: 576px) {
+  .sidebar nav {
+    justify-content: flex-start;
+    gap: 5px;
+    padding: 5px 10px;
+  }
+
+  .sidebar nav a {
+    flex-shrink: 0;
+    min-width: 55px;
+  }
 }
 
 </style>

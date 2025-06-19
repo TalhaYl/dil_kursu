@@ -9,6 +9,118 @@ const upload = require('../middleware/upload');
 const path = require('path');
 const fs = require('fs');
 
+// Zaman çakışması kontrolü fonksiyonu
+async function checkScheduleConflict(studentId, newCourseId, connection) {
+    try {
+        // Öğrencinin mevcut kurslarını ve programlarını al
+        const [existingCourses] = await connection.query(`
+            SELECT c.id, c.name, c.schedule, c.start_date, c.end_date
+            FROM student_courses sc
+            JOIN courses c ON sc.course_id = c.id
+            WHERE sc.student_id = ? AND c.status = 'active'
+        `, [studentId]);
+
+        // Yeni kursun programını al
+        const [newCourse] = await connection.query(`
+            SELECT id, name, schedule, start_date, end_date
+            FROM courses
+            WHERE id = ? AND status = 'active'
+        `, [newCourseId]);
+
+        if (newCourse.length === 0) {
+            return { hasConflict: true, message: 'Kurs bulunamadı veya aktif değil' };
+        }
+
+        const newCourseData = newCourse[0];
+        let newSchedule;
+        
+        try {
+            newSchedule = typeof newCourseData.schedule === 'string' 
+                ? JSON.parse(newCourseData.schedule) 
+                : newCourseData.schedule;
+        } catch (e) {
+            return { hasConflict: true, message: 'Yeni kursun program bilgisi geçersiz' };
+        }
+
+        // Tarih aralığı çakışması kontrolü
+        const newStartDate = new Date(newCourseData.start_date);
+        const newEndDate = new Date(newCourseData.end_date);
+
+        for (const existingCourse of existingCourses) {
+            const existingStartDate = new Date(existingCourse.start_date);
+            const existingEndDate = new Date(existingCourse.end_date);
+
+            // Tarih aralıkları çakışıyor mu?
+            const dateOverlap = (newStartDate <= existingEndDate) && (newEndDate >= existingStartDate);
+            
+            if (dateOverlap) {
+                let existingSchedule;
+                try {
+                    existingSchedule = typeof existingCourse.schedule === 'string' 
+                        ? JSON.parse(existingCourse.schedule) 
+                        : existingCourse.schedule;
+                } catch (e) {
+                    continue; // Geçersiz schedule'u atla
+                }
+
+                // Günlük saat çakışması kontrolü
+                for (const [day, newTimeSlot] of Object.entries(newSchedule)) {
+                    if (existingSchedule[day] && newTimeSlot && existingSchedule[day]) {
+                        // Önce slot bazlı kontrol yap (daha detaylı)
+                        if (newTimeSlot.slots && existingSchedule[day].slots) {
+                            for (const newSlot of newTimeSlot.slots) {
+                                for (const existingSlot of existingSchedule[day].slots) {
+                                    const [newSlotStart, newSlotEnd] = newSlot.split('-');
+                                    const [existingSlotStart, existingSlotEnd] = existingSlot.split('-');
+                                    
+                                    if (newSlotStart && newSlotEnd && existingSlotStart && existingSlotEnd) {
+                                        const slotOverlap = (newSlotStart < existingSlotEnd) && (newSlotEnd > existingSlotStart);
+                                        
+                                        if (slotOverlap) {
+                                            return {
+                                                hasConflict: true,
+                                                message: `"${existingCourse.name}" kursu ile zaman çakışması var. ${day} günü ${existingSlot} saatleri çakışıyor.`,
+                                                conflictingCourse: existingCourse.name,
+                                                conflictDay: day,
+                                                conflictTime: existingSlot
+                                            };
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // Slot yoksa genel start-end kontrolü yap
+                            const newStart = newTimeSlot.start;
+                            const newEnd = newTimeSlot.end;
+                            const existingStart = existingSchedule[day].start;
+                            const existingEnd = existingSchedule[day].end;
+
+                            if (newStart && newEnd && existingStart && existingEnd) {
+                                const timeOverlap = (newStart < existingEnd) && (newEnd > existingStart);
+                                
+                                if (timeOverlap) {
+                                    return {
+                                        hasConflict: true,
+                                        message: `"${existingCourse.name}" kursu ile zaman çakışması var. ${day} günü ${existingStart}-${existingEnd} saatleri çakışıyor.`,
+                                        conflictingCourse: existingCourse.name,
+                                        conflictDay: day,
+                                        conflictTime: `${existingStart}-${existingEnd}`
+                                    };
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return { hasConflict: false };
+    } catch (error) {
+        console.error('Schedule conflict check error:', error);
+        return { hasConflict: true, message: 'Zaman çakışması kontrolü sırasında hata oluştu' };
+    }
+}
+
 // 1. Öğrenci kendi profil fotoğrafını güncelleyebilsin
 router.post('/profile/image', verifyToken, upload.single('image'), async (req, res) => {
     try {
@@ -47,6 +159,22 @@ router.post('/profile/image', verifyToken, upload.single('image'), async (req, r
     }
 });
 
+// Geçici resim yükleme (admin) - yeni öğrenci için (ÖNEMLİ: /:id/image route'undan ÖNCE olmalı)
+router.post('/temp/image', verifyToken, checkRole(['admin']), upload.single('image'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'Resim yüklenmedi' });
+        }
+
+        const imagePath = `/uploads/${req.file.filename}`;
+        console.log('Geçici resim yüklendi:', imagePath); // Debug için
+        res.json({ image_path: imagePath });
+    } catch (error) {
+        console.error('Error uploading temporary image:', error);
+        res.status(500).json({ error: 'Sunucu hatası: ' + error.message });
+    }
+});
+
 // Öğrenci resmi yükle (admin)
 router.post('/:id/image', verifyToken, checkRole(['admin']), upload.single('image'), async (req, res) => {
     try {
@@ -66,21 +194,6 @@ router.post('/:id/image', verifyToken, checkRole(['admin']), upload.single('imag
         res.json(updatedStudent[0]);
     } catch (error) {
         console.error('Error uploading student image:', error);
-        res.status(500).json({ error: 'Sunucu hatası: ' + error.message });
-    }
-});
-
-// Geçici resim yükleme (admin)
-router.post('/temp/image', verifyToken, checkRole(['admin']), upload.single('image'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'Resim yüklenmedi' });
-        }
-
-        const imagePath = `/uploads/${req.file.filename}`;
-        res.json({ image_path: imagePath });
-    } catch (error) {
-        console.error('Error uploading temporary image:', error);
         res.status(500).json({ error: 'Sunucu hatası: ' + error.message });
     }
 });
@@ -147,7 +260,6 @@ router.put('/profile', verifyToken, async (req, res) => {
       }
       // Şifre güncelleme
       if (newPassword) {
-        const bcrypt = require('bcrypt');
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         await db.pool.query(
           'UPDATE users SET name = ?, email = ?, phone = ?, password = ? WHERE id = ?',
@@ -242,44 +354,105 @@ router.get('/:id', verifyToken, async (req, res) => {
 
 // Yeni öğrenci ekle
 router.post('/', verifyToken, checkRole(['admin']), async (req, res) => {
+    const connection = await db.pool.getConnection();
+    await connection.beginTransaction();
+
     try {
         console.log('Gelen veri:', req.body); // Debug için
 
-        const { name, email, phone, address, branch_id, course_ids, image_path } = req.body;
+        const { name, email, phone, address, branch_id, course_ids, status, latitude, longitude, image_path } = req.body;
 
-        if (!name) {
-            return res.status(400).json({ error: 'Öğrenci adı zorunludur' });
+        if (!name || !email) {
+            return res.status(400).json({ error: 'Öğrenci adı ve e-posta zorunludur' });
         }
 
-        // Öğrenciyi ekle
-        const [result] = await db.pool.query(
-            'INSERT INTO students (name, email, phone, address, branch_id, image_path, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [name, email || null, phone || null, address || null, branch_id || null, image_path || null, 'active']
+        // E-posta kontrolü
+        const [existingUser] = await connection.query(
+            'SELECT id FROM users WHERE email = ?',
+            [email]
+        );
+        if (existingUser.length > 0) {
+            await connection.rollback();
+            return res.status(400).json({ error: 'Bu e-posta adresi zaten kullanılıyor' });
+        }
+
+        // Geçici şifre oluştur ve hash'le
+        const tempPassword = '123456'; // Sabit geçici şifre
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
+        
+        console.log(`Öğrenci için geçici şifre: ${tempPassword}`); // Debug için
+        
+        // Önce users tablosuna ekle (role_id: 3 = student)
+        const [userResult] = await connection.query(
+            'INSERT INTO users (name, email, phone, role_id, password) VALUES (?, ?, ?, ?, ?)',
+            [name, email, phone || null, 3, hashedPassword]
         );
 
-        console.log('Eklenen öğrenci ID:', result.insertId); // Debug için
-        console.log('Resim yolu:', image_path); // Debug için
+        const userId = userResult.insertId;
+        console.log('Eklenen user ID:', userId); // Debug için
 
-        const studentId = result.insertId;
+        // Sonra students tablosuna ekle
+        const [studentResult] = await connection.query(
+            'INSERT INTO students (user_id, address, branch_id, latitude, longitude, image_path, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [userId, address || null, branch_id || null, latitude || null, longitude || null, image_path || null, status || 'active']
+        );
+
+        const studentId = studentResult.insertId;
+        console.log('Eklenen öğrenci ID:', studentId); // Debug için
+        console.log('Resim yolu:', image_path); // Debug için
 
         // Kurs kayıtlarını ekle
         if (course_ids && course_ids.length > 0) {
-            const courseValues = course_ids.map(courseId => [studentId, courseId]);
-            await db.pool.query(
-                'INSERT INTO student_courses (student_id, course_id) VALUES ?',
-                [courseValues]
-            );
-            console.log('Kurs kayıtları eklendi:', courseValues); // Debug için
+            for (const courseId of course_ids) {
+                // Kapasite kontrolü
+                const [courseInfo] = await connection.query(
+                    `SELECT max_students, (SELECT COUNT(*) FROM student_courses WHERE course_id = ?) as current_count FROM courses WHERE id = ?`,
+                    [courseId, courseId]
+                );
+                if (!courseInfo.length) {
+                    await connection.rollback();
+                    return res.status(404).json({ error: `Kurs bulunamadı (ID: ${courseId})` });
+                }
+                if (courseInfo[0].current_count >= courseInfo[0].max_students) {
+                    await connection.rollback();
+                    return res.status(400).json({ error: `Kursun kapasitesi dolu (ID: ${courseId})` });
+                }
+
+                // Zaman çakışması kontrolü
+                const conflictCheck = await checkScheduleConflict(studentId, courseId, connection);
+                if (conflictCheck.hasConflict) {
+                    await connection.rollback();
+                    return res.status(400).json({ error: conflictCheck.message });
+                }
+                
+                await connection.query(
+                    'INSERT INTO student_courses (student_id, course_id) VALUES (?, ?)',
+                    [studentId, courseId]
+                );
+            }
+            console.log('Kurs kayıtları eklendi:', course_ids); // Debug için
         }
 
+        await connection.commit();
+
         // Eklenen öğrenciyi getir
-        const [newStudent] = await db.pool.query('SELECT * FROM students WHERE id = ?', [studentId]);
+        const [newStudent] = await connection.query(`
+            SELECT s.*, u.email, u.phone, u.name, b.name as branch_name
+            FROM students s 
+            JOIN users u ON s.user_id = u.id 
+            LEFT JOIN branches b ON s.branch_id = b.id
+            WHERE s.id = ?
+        `, [studentId]);
+        
         console.log('Eklenen öğrenci:', newStudent[0]); // Debug için
 
         res.status(201).json(newStudent[0]);
     } catch (error) {
+        await connection.rollback();
         console.error('Öğrenci ekleme hatası:', error);
         res.status(500).json({ error: 'Sunucu hatası: ' + error.message });
+    } finally {
+        connection.release();
     }
 });
 
@@ -331,6 +504,14 @@ router.put('/:id', verifyToken, checkRole(['admin']), async (req, res) => {
                   await connection.rollback();
                   return res.status(400).json({ error: `Kursun kapasitesi dolu (ID: ${courseId})` });
                 }
+
+                // Zaman çakışması kontrolü (güncellenecek kurslar için)
+                const conflictCheck = await checkScheduleConflict(studentId, courseId, connection);
+                if (conflictCheck.hasConflict) {
+                    await connection.rollback();
+                    return res.status(400).json({ error: conflictCheck.message });
+                }
+
                 await connection.query(
                     'INSERT INTO student_courses (student_id, course_id) VALUES (?, ?)',
                     [studentId, courseId]
@@ -400,11 +581,23 @@ router.post('/:id/courses', verifyToken, checkRole(['admin']), async (req, res) 
         if (courseInfo[0].current_count >= courseInfo[0].max_students) {
           return res.status(400).json({ error: 'Kursun kapasitesi dolu' });
         }
-        // Öğrenciyi derse kaydet
-        await db.pool.query(
-            'INSERT INTO student_courses (student_id, course_id) VALUES (?, ?)',
-            [studentId, course_id]
-        );
+
+        // Zaman çakışması kontrolü
+        const connection = await db.pool.getConnection();
+        try {
+            const conflictCheck = await checkScheduleConflict(studentId, course_id, connection);
+            if (conflictCheck.hasConflict) {
+                return res.status(400).json({ error: conflictCheck.message });
+            }
+
+            // Öğrenciyi derse kaydet
+            await connection.query(
+                'INSERT INTO student_courses (student_id, course_id) VALUES (?, ?)',
+                [studentId, course_id]
+            );
+        } finally {
+            connection.release();
+        }
 
         res.json({ message: 'Öğrenci başarıyla derse kaydedildi' });
     } catch (error) {

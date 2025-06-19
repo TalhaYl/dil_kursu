@@ -93,15 +93,28 @@ const router = createRouter({
 
 // Navigation guard
 router.beforeEach((to, from, next) => {
-    const token = localStorage.getItem('token');
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    try {
+        const token = localStorage.getItem('token');
+        let user = {};
+        
+        try {
+            const userString = localStorage.getItem('user');
+            user = userString ? JSON.parse(userString) : {};
+        } catch (parseError) {
+            console.warn('Failed to parse user from localStorage:', parseError);
+            user = {};
+        }
 
-    if (to.meta.requiresAuth && !token) {
-        next('/login');
-    } else if (to.meta.role && to.meta.role !== user.role) {
+        if (to.meta.requiresAuth && !token) {
+            next('/login');
+        } else if (to.meta.role && to.meta.role !== user.role) {
+            next('/');
+        } else {
+            next();
+        }
+    } catch (error) {
+        console.error('Router navigation error:', error);
         next('/');
-    } else {
-        next();
     }
 });
 

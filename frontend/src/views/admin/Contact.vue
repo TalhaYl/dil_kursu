@@ -45,9 +45,7 @@
             <i class="fas fa-clock"></i>
             <p>{{ contact.working_hours }}</p>
           </div>
-          <div v-if="contact.map_embed" class="map-container">
-            <div v-html="contact.map_embed"></div>
-          </div>
+
           <div v-if="contact.social_media" class="social-media">
             <a v-for="(url, platform) in JSON.parse(contact.social_media)" 
                :key="platform" 
@@ -96,10 +94,6 @@
             <input type="text" id="working_hours" v-model="formData.working_hours">
           </div>
           <div class="form-group">
-            <label for="map_embed">Harita Gömme Kodu</label>
-            <textarea id="map_embed" v-model="formData.map_embed" rows="3"></textarea>
-          </div>
-          <div class="form-group">
             <label>Sosyal Medya</label>
             <div class="social-media-inputs">
               <div class="social-input">
@@ -140,6 +134,7 @@
 <script>
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
+import toast from '@/utils/toast'
 
 export default {
   name: 'ContactView',
@@ -155,7 +150,6 @@ export default {
       phone: '',
       email: '',
       working_hours: '',
-      map_embed: '',
       social_media: {
         facebook: '',
         twitter: '',
@@ -217,7 +211,6 @@ export default {
         phone: '',
         email: '',
         working_hours: '',
-        map_embed: '',
         social_media: {
           facebook: '',
           twitter: '',
@@ -239,15 +232,16 @@ export default {
     }
 
     const deleteContact = async (contact) => {
-      if (!confirm('Bu iletişim bilgisini silmek istediğinizden emin misiniz?')) return
+      const confirmed = await toast.confirm('Bu iletişim bilgisini silmek istediğinizden emin misiniz?', 'İletişim Silme')
+      if (!confirmed) return
       
       try {
         await axios.delete(`/api/contact-info/${contact.id}`)
         await fetchContactInfo()
-        alert('İletişim bilgisi başarıyla silindi!')
+        toast.success('İletişim bilgisi başarıyla silindi!')
       } catch (error) {
         console.error('Error deleting contact info:', error)
-        alert('Silme işlemi sırasında bir hata oluştu!')
+        toast.error('Silme işlemi sırasında bir hata oluştu!')
       }
     }
 
@@ -265,10 +259,10 @@ export default {
         }
         await fetchContactInfo()
         showModal.value = false
-        alert(isEditing.value ? 'İletişim bilgisi başarıyla güncellendi!' : 'Yeni iletişim bilgisi başarıyla eklendi!')
+        toast.success(isEditing.value ? 'İletişim bilgisi başarıyla güncellendi!' : 'Yeni iletişim bilgisi başarıyla eklendi!')
       } catch (error) {
         console.error('Error saving contact info:', error)
-        alert('Kaydetme sırasında bir hata oluştu!')
+        toast.error('Kaydetme sırasında bir hata oluştu!')
       }
     }
 
@@ -454,16 +448,7 @@ export default {
   line-height: 1.6;
 }
 
-.map-container {
-  margin-top: 15px;
-}
 
-.map-container iframe {
-  width: 100%;
-  height: 300px;
-  border: none;
-  border-radius: 4px;
-}
 
 .social-media {
   display: flex;
@@ -580,5 +565,146 @@ export default {
 .header-actions button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Mobil Responsive Tasarım */
+@media (max-width: 768px) {
+  .contact-management {
+    padding: 10px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+  }
+
+  .header-actions button {
+    padding: 12px 16px;
+    font-size: 14px;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .contact-list {
+    gap: 15px;
+  }
+
+  .contact-card {
+    padding: 15px;
+  }
+
+  .contact-header {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .contact-title {
+    width: 100%;
+  }
+
+  .contact-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .contact-content {
+    gap: 12px;
+  }
+
+  .social-media {
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  /* Modal mobil optimizasyonu */
+  .modal-content {
+    width: 95% !important;
+    max-width: 95% !important;
+    margin: 10px;
+    padding: 15px;
+  }
+
+  .form-group {
+    margin-bottom: 12px;
+  }
+
+  .form-group label {
+    font-size: 14px;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    padding: 12px;
+    font-size: 16px; /* iOS zoom'u engellemek için */
+    border-radius: 6px;
+  }
+
+  .social-media-inputs {
+    gap: 8px;
+  }
+
+  .social-input {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 15px;
+  }
+
+  .form-actions button {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 480px) {
+  .contact-management {
+    padding: 5px;
+  }
+
+  .page-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .header-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .contact-card {
+    padding: 12px;
+  }
+
+  .contact-header h3 {
+    font-size: 1.1rem;
+  }
+
+  .contact-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .modal-content {
+    padding: 10px;
+  }
+
+  .social-media {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
 }
 </style> 

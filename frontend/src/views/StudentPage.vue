@@ -26,6 +26,7 @@
             <div v-for="course in myCourses" :key="course.id" class="course-item">
               <h3>{{ course.name }}</h3>
               <p>Dil: {{ course.language }}</p>
+              <p>Seviye: {{ course.level || 'A1' }}</p>
               <p>Öğretmen: {{ course.teacher_name }}</p>
               <p>Başlangıç: {{ formatDate(course.start_date) }}</p>
               <p>Bitiş: {{ formatDate(course.end_date) }}</p>
@@ -76,15 +77,7 @@
               <label>Yeni Şifre</label>
               <input type="password" v-model="profile.newPassword">
             </div>
-            <div class="form-group">
-              <label>Profil Fotoğrafı</label>
-              <ImageUploader
-                v-model="profile.image_path"
-                :upload-url="'/api/students/profile/image'"
-                placeholder-text="Profil fotoğrafını buraya sürükleyin veya tıklayın"
-                @upload-success="handleProfileImageUpload"
-              />
-            </div>
+
             <button type="submit" class="save-btn">Bilgileri Güncelle</button>
           </form>
         </div>
@@ -98,24 +91,101 @@
             <h3>Kurs Ara</h3>
             <div class="search-filters">
               <div class="filter-group">
-                <label>Kurs:</label>
+                <label>Dil:</label>
                 <select v-model="searchFilters.language">
-                  <option value="">Tümü</option>
+                  <option value="">Tüm Diller</option>
+                  <option value="Türkçe">Türkçe</option>
                   <option value="İngilizce">İngilizce</option>
                   <option value="Almanca">Almanca</option>
                   <option value="Fransızca">Fransızca</option>
                   <option value="İspanyolca">İspanyolca</option>
-                  <option value="Türkçe">Türkçe</option>
+                  <option value="İtalyanca">İtalyanca</option>
+                  <option value="Rusça">Rusça</option>
+                  <option value="Arapça">Arapça</option>
+                  <option value="Çince">Çince</option>
+                  <option value="Japonca">Japonca</option>
                 </select>
               </div>
+
+              <div class="filter-group">
+                <label>Seviye:</label>
+                <select v-model="searchFilters.level">
+                  <option value="">Tüm Seviyeler</option>
+                  <option value="A1">A1</option>
+                  <option value="A2">A2</option>
+                  <option value="B1">B1</option>
+                  <option value="B2">B2</option>
+                  <option value="C1">C1</option>
+                  <option value="C2">C2</option>
+                </select>
+              </div>
+              
+
+              
+              <div class="filter-group">
+                <label>Durum:</label>
+                <select v-model="searchFilters.status">
+                  <option value="">Tümü</option>
+                  <option value="active">Aktif</option>
+                  <option value="inactive">Pasif</option>
+                  <option value="completed">Tamamlandı</option>
+                </select>
+              </div>
+              
               <div class="filter-group">
                 <label>Gün:</label>
                 <select v-model="searchFilters.day">
-                  <option value="">Tümü</option>
+                  <option value="">Tüm Günler</option>
                   <option v-for="day in weekDays" :key="day" :value="day">{{ day }}</option>
                 </select>
               </div>
-              <button @click="searchCourses" class="search-btn">Ara</button>
+              
+              <div class="filter-group">
+                <label>Zaman Dilimi:</label>
+                <select v-model="searchFilters.timeSlot">
+                  <option value="">Tüm Saatler</option>
+                  <option value="09:00-12:00">Sabah (09:00-12:00)</option>
+                  <option value="13:00-16:00">Öğleden Sonra (13:00-16:00)</option>
+                  <option value="17:00-20:00">Akşam (17:00-20:00)</option>
+                </select>
+              </div>
+              
+              <div class="filter-group">
+                <label>Şube:</label>
+                <select v-model="searchFilters.branch">
+                  <option value="">Tüm Şubeler</option>
+                  <option v-for="branch in allBranches" :key="branch.id" :value="branch.id">{{ branch.name }}</option>
+                </select>
+              </div>
+              
+              <div class="filter-group">
+                <label>Öğretmen:</label>
+                <select v-model="searchFilters.teacher">
+                  <option value="">Tüm Öğretmenler</option>
+                  <option v-for="teacher in availableTeachers" :key="teacher.id" :value="teacher.id">{{ teacher.name }}</option>
+                </select>
+              </div>
+              
+
+              
+              <div class="filter-group">
+                <label>Maksimum Öğrenci:</label>
+                <select v-model="searchFilters.maxStudents">
+                  <option value="">Tümü</option>
+                  <option value="1-10">1-10 Kişi</option>
+                  <option value="11-20">11-20 Kişi</option>
+                  <option value="21-30">21+ Kişi</option>
+                </select>
+              </div>
+              
+              <div class="filter-actions">
+                <button @click="searchCourses" class="search-btn">
+                  <i class="fas fa-search"></i> Ara
+                </button>
+                <button @click="clearFilters" class="clear-btn">
+                  <i class="fas fa-times"></i> Temizle
+                </button>
+              </div>
             </div>
 
             <div v-if="errorMessage" class="error-message">
@@ -127,12 +197,12 @@
                 <div v-for="course in searchedCourses" :key="course.id" class="course-card">
                   <h5>{{ course.name }}</h5>
                   <p><strong>Dil:</strong> {{ course.language }}</p>
+                  <p><strong>Seviye:</strong> {{ course.level || 'A1' }}</p>
                   <p><strong>Şube:</strong> {{ course.branch_name }}</p>
                   <p><strong>Adres:</strong> {{ course.branch_address }}</p>
                   <p><strong>Öğretmen:</strong> {{ course.teacher_name }}</p>
                   <p><strong>Gün/Saat:</strong> {{ formatSchedule(course.schedule) }}</p>
                   <p><strong>Maksimum Öğrenci:</strong> {{ course.max_students }}</p>
-                  <button class="select-btn" @click="selectCourse(course)">Seç</button>
                   <button class="register-btn" @click="registerToSearchedCourse(course)">Kursa Kayıt Ol</button>
                 </div>
               </div>
@@ -151,48 +221,46 @@
               <p><strong>Enlem:</strong> {{ selectedLocation.lat }}</p>
               <p><strong>Boylam:</strong> {{ selectedLocation.lng }}</p>
             </div>
+            <!-- Şube Listesi -->
+            <div v-if="allBranches && allBranches.length > 0" class="branches-list-section">
+              <h3>Şubeler (En Yakından Uzağa)</h3>
+              <ul class="branches-list">
+                <li v-for="branch in allBranches" :key="branch.id"
+                    :class="['branch-list-item', { selected: selectedBranch && selectedBranch.id === branch.id }]"
+                    @click="onBranchListClick(branch)">
+                  {{ capitalize(branch.name) }} <span class="branch-distance">({{ branch.distance }} km)</span>
+                </li>
+              </ul>
+            </div>
           </div>
 
-          
-
-          
+          <!-- Şube Kursları Listesi -->
+          <div v-if="selectedBranch && availableCourses && availableCourses.length > 0" class="branch-courses-section">
+            <h3>{{ capitalize(selectedBranch.name) }} Şubesindeki Kurslar</h3>
+            <div class="courses-list">
+              <div v-for="course in availableCourses" :key="course.id" class="course-item">
+                <h3>{{ course.name }}</h3>
+                <p>Dil: {{ course.language }}</p>
+                <p>Seviye: {{ course.level || 'A1' }}</p>
+                <p>Öğretmen: {{ course.teacher_name }}</p>
+                <p>Başlangıç: {{ formatDate(course.start_date) }}</p>
+                <p>Bitiş: {{ formatDate(course.end_date) }}</p>
+                <button class="register-btn" @click="registerToCourse(course.id)">Kursa Kayıt Ol</button>
+              </div>
+            </div>
+          </div>
 
           <div v-if="selectedCourse" class="course-detail-section">
             <h3>Kurs Detayları</h3>
             <p><strong>Kurs Adı:</strong> {{ selectedCourse.name }}</p>
             <p><strong>Dil:</strong> {{ selectedCourse.language }}</p>
+            <p><strong>Seviye:</strong> {{ selectedCourse.level || 'A1' }}</p>
             <p><strong>Şube:</strong> {{ selectedCourse.branch_name }}</p>
             <p><strong>Adres:</strong> {{ selectedCourse.branch_address }}</p>
             <p><strong>Öğretmen:</strong> {{ selectedCourse.teacher_name }}</p>
             <p><strong>Gün/Saat:</strong> {{ formatSchedule(selectedCourse.schedule) }}</p>
             <p><strong>Maksimum Öğrenci:</strong> {{ selectedCourse.max_students }}</p>
             <button class="register-btn" @click="registerToSelectedCourse">Kursa Kayıt Ol</button>
-          </div>
-
-          <!-- Şube Seçimi -->
-          <div class="branch-selection" v-if="allBranches && allBranches.length > 0">
-            <label for="branch-select"><strong>Şube Seçimi</strong></label>
-            <select id="branch-select" v-model="selectedBranch" class="branch-select" @change="onBranchChange">
-              <option value="">Şube Seçiniz</option>
-              <option v-for="branch in allBranches" 
-                      :key="branch.id" 
-                      :value="branch">
-                {{ capitalize(branch.name) }}
-              </option>
-            </select>
-          </div>
-
-          <!-- Kurs Seçimi -->
-          <div class="course-selection" v-if="selectedBranch">
-            <label for="course-select"><strong>Kurs Seçimi</strong></label>
-            <select id="course-select" v-model="selectedCourse" class="course-select">
-              <option value="">Kurs Seçiniz</option>
-              <option v-for="course in availableCourses" 
-                      :key="course.id" 
-                      :value="course">
-                {{ course.name }} - {{ course.language }}
-              </option>
-            </select>
           </div>
         </div>
       </div>
@@ -206,11 +274,26 @@
 
 <script>
 import axios from 'axios';
-import ImageUploader from '@/components/ImageUploader.vue';
+import toast from '@/utils/toast';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import branchIconPng from '@/assets/images/a.png';
+
+// Leaflet marker icon düzeltmesi
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+
+let DefaultIcon = L.icon({
+  iconUrl: icon,
+  shadowUrl: iconShadow,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41]
+});
+
+L.Marker.prototype.options.icon = DefaultIcon;
 
 export default {
   name: 'StudentPage',
-  components: { ImageUploader },
   data() {
     return {
       currentTab: 'courses',
@@ -241,7 +324,7 @@ export default {
       otherBranches: [],
       availableCourses: [],
       map: null,
-      marker: null,
+      currentMarker: null, // Mevcut öğrenci marker'ı
       mapLoaded: false,
       mapLoadError: false,
       mapLoadAttempted: false,
@@ -250,8 +333,13 @@ export default {
       selectedBranch: null,
       searchFilters: {
         language: '',
+        level: '',
+        status: '',
         day: '',
-        time: ''
+        timeSlot: '',
+        branch: '',
+        teacher: '',
+        maxStudents: ''
       },
       searchedCourses: [],
       exampleCourses: [
@@ -269,7 +357,9 @@ export default {
         { id: 3, name: 'Fransızca A2', language: 'Fransızca', branchId: 2, day: 'Çarşamba', time: '16:00' }
       ],
       selectedCourse: null,
-      allBranches: []
+      allBranches: [],
+      branchMarkers: [],
+      availableTeachers: []
     }
   },
   computed: {
@@ -289,7 +379,7 @@ export default {
       this.$router.push('/login');
     },
     formatDate(date) {
-      if (!date) return '';
+      if (!date) return '-';
       return new Date(date).toLocaleDateString('tr-TR');
     },
     async fetchMyCourses() {
@@ -357,60 +447,142 @@ export default {
         if (!payload.newPassword) delete payload.newPassword;
         const response = await axios.put('/api/students/profile', payload);
         this.profile = { ...response.data, newPassword: '' };
+        toast.success('Profil bilgileriniz başarıyla güncellendi.', 'Profil Güncellendi');
       } catch (error) {
         console.error('Profil güncellenemedi:', error);
+        toast.error('Profil güncellenirken bir hata oluştu.', 'Güncelleme Hatası');
       }
     },
-    loadGoogleMapsScript() {
-      if (window.google && window.google.maps) {
-        this.initMap();
+    // Leaflet haritayı başlat
+    initMap() {
+      const mapElement = this.$refs.mapContainer;
+      if (!mapElement) {
+        console.error('Map element not found');
         return;
       }
 
-      window.initMap = () => {
-        this.initMap();
-      };
-
-      const script = document.createElement('script');
-      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyA1q1I6HAQ_A_Hq1pzkBVXyIC8bBvnVMAQ&callback=initMap&libraries=places`;
-      script.async = true;
-      script.defer = true;
-      document.head.appendChild(script);
-    },
-    initMap() {
-      const container = this.$refs.mapContainer;
-      if (!container) return;
-
-      const mapOptions = {
-        center: { lat: 41.0082, lng: 28.9784 },
-        zoom: 12,
-        mapTypeId: 'roadmap'
-      };
-
-      this.map = new window.google.maps.Map(container, mapOptions);
-
-      // Marker referansını sıfırla
-      this.marker = null;
-
-      this.map.addListener('click', (event) => {
-        // Tüm markerları temizle (sadece bir marker olacak)
-        if (this.marker) {
-          this.marker.setMap(null);
-        }
-
-        this.marker = new window.google.maps.Marker({
-          position: event.latLng,
-          map: this.map,
-          title: 'Seçilen Konum'
+      try {
+        // Haritayı oluştur
+        this.map = L.map(mapElement, {
+          center: [35.34, 33.32],
+          zoom: 12,
+          zoomControl: true,
+          attributionControl: true
         });
 
-        this.selectedLocation = {
-          lat: event.latLng.lat(),
-          lng: event.latLng.lng()
-        };
-        this.getNearestBranch();
-      });
+        // OpenStreetMap tile layer ekle
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors',
+          maxZoom: 19
+        }).addTo(this.map);
+
+        // Haritayı yeniden boyutlandır
+        setTimeout(() => {
+          this.map.invalidateSize();
+        }, 100);
+
+        // Haritaya tıklandığında
+        this.map.on('click', (e) => {
+          const { lat, lng } = e.latlng;
+          this.updateLocationMarker(lat, lng);
+        });
+
+        // Şube markerlarını ekle
+        this.addBranchMarkers();
+
+        console.log('Student page map initialized successfully');
+      } catch (error) {
+        console.error('Error initializing student page map:', error);
+      }
     },
+    // Marker'ı güncelle (eski marker'ı kaldır, yeni marker ekle)
+    updateLocationMarker(lat, lng) {
+      // Harita yüklenmemişse çık
+      if (!this.map) {
+        console.warn('Map not initialized yet, skipping marker update');
+        return;
+      }
+
+      try {
+        // Eski marker'ı kaldır
+        if (this.currentMarker) {
+          this.map.removeLayer(this.currentMarker);
+          this.currentMarker = null;
+        }
+
+        // Kırmızı marker ikonu
+        const redIcon = L.icon({
+          iconUrl: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
+          iconSize: [32, 32],
+          iconAnchor: [16, 32],
+          popupAnchor: [0, -32]
+        });
+
+        // Yeni marker oluştur
+        this.currentMarker = L.marker([lat, lng], {
+          draggable: true,
+          icon: redIcon
+        }).addTo(this.map);
+
+        // Marker sürüklendiğinde koordinatları güncelle
+        this.currentMarker.on('dragend', (e) => {
+          const { lat, lng } = e.target.getLatLng();
+          this.updateCoordinates(lat, lng);
+        });
+
+        // İlk koordinatları ayarla
+        this.updateCoordinates(lat, lng);
+      } catch (error) {
+        console.error('Error updating location marker:', error);
+      }
+    },
+
+
+
+    // Koordinatları güncelle ve en yakın şubeyi bul
+    updateCoordinates(lat, lng) {
+      this.selectedLocation = { 
+        lat: parseFloat(lat.toFixed(6)), 
+        lng: parseFloat(lng.toFixed(6)) 
+      };
+      console.log('Konum güncellendi:', this.selectedLocation);
+      this.getNearestBranch();
+    },
+
+    clearUserLocationMarkers() {
+      // Sadece kullanıcı konum markerını temizle
+      if (this.currentMarker && this.map) {
+        try {
+          this.map.removeLayer(this.currentMarker);
+          this.currentMarker = null;
+        } catch (error) {
+          console.warn('Error removing user location marker:', error);
+        }
+      }
+      
+      console.log('Kullanıcı konum markeri temizlendi');
+    },
+    clearAllMarkers() {
+      // Tüm markerları temizle (kullanıcı konumu + şube markerları)
+      this.clearUserLocationMarkers();
+      
+      // Şube markerlarını da temizle
+      if (this.branchMarkers && this.branchMarkers.length > 0) {
+        this.branchMarkers.forEach(marker => {
+          if (marker && this.map) {
+            try {
+              this.map.removeLayer(marker);
+            } catch (error) {
+              console.warn('Error removing branch marker:', error);
+            }
+          }
+        });
+        this.branchMarkers = [];
+      }
+      
+      console.log('Tüm markerlar temizlendi');
+    },
+
     capitalize(str) {
       if (!str) return '';
       return str.charAt(0).toUpperCase() + str.slice(1);
@@ -431,6 +603,11 @@ export default {
           this.selectedBranch = this.nearestBranch;
           this.selectedCourse = null;
           this.courses = [];
+          
+          // En yakın şubedeki kursları otomatik olarak getir
+          if (this.nearestBranch && this.nearestBranch.id) {
+            await this.fetchBranchCourses(this.nearestBranch.id);
+          }
         } else {
           this.nearestBranch = null;
           console.error('Şubeler bulunamadı:', res.data.message);
@@ -498,9 +675,13 @@ export default {
       try {
         await axios.post(`/api/students/courses/${courseId}`);
         await this.fetchMyCourses();
-        await this.fetchBranchCourses(this.selectedBranch.id);
+        if (this.selectedBranch && this.selectedBranch.id) {
+          await this.fetchBranchCourses(this.selectedBranch.id);
+        }
+        // Success mesajı register fonksiyonlarında gösteriliyor
       } catch (error) {
         console.error('Kurs kaydı hatası:', error);
+        throw error; // Hatayı yukarı ilet
       }
     },
     selectBranch(branch) {
@@ -520,9 +701,14 @@ export default {
       const currentCount = this.selectedCourse.student_count || 0;
       const maxCount = this.selectedCourse.max_students || 0;
       if (maxCount > 0 && currentCount >= maxCount) {
-        alert('Kurs dolu, kayıt yapılamaz.');
+        toast.error('Kurs dolu, kayıt yapılamaz.', 'Kayıt Hatası');
       } else {
-        await this.registerToCourse(this.selectedCourse.id);
+        try {
+          await this.registerToCourse(this.selectedCourse.id);
+          toast.success('Kursa başarıyla kayıt oldunuz!', 'Kayıt Başarılı');
+        } catch (error) {
+          toast.error('Kayıt sırasında bir hata oluştu.', 'Kayıt Hatası');
+        }
       }
     },
     async searchCourses() {
@@ -537,8 +723,13 @@ export default {
 
         const params = {};
         if (this.searchFilters.language) params.language = this.searchFilters.language;
+        if (this.searchFilters.level) params.level = this.searchFilters.level;
+        if (this.searchFilters.status) params.status = this.searchFilters.status;
         if (this.searchFilters.day) params.day = this.searchFilters.day;
-        if (this.searchFilters.time) params.time = this.searchFilters.time;
+        if (this.searchFilters.timeSlot) params.timeSlot = this.searchFilters.timeSlot;
+        if (this.searchFilters.branch) params.branch = this.searchFilters.branch;
+        if (this.searchFilters.teacher) params.teacher = this.searchFilters.teacher;
+        if (this.searchFilters.maxStudents) params.maxStudents = this.searchFilters.maxStudents;
 
         const response = await axios.get('/api/courses/student-search', {
           params,
@@ -549,18 +740,23 @@ export default {
 
         if (response.data.success) {
           this.searchedCourses = response.data.courses;
+          if (this.searchedCourses.length === 0) {
+            toast.info('Arama kriterlerinize uygun kurs bulunamadı.', 'Arama Sonucu');
+          } else {
+            toast.success(`${this.searchedCourses.length} kurs bulundu.`, 'Arama Başarılı');
+          }
         } else {
           this.errorMessage = 'Kurslar getirilirken bir hata oluştu.';
-          alert(this.errorMessage);
+          toast.error(this.errorMessage);
         }
       } catch (error) {
         console.error('Kurs arama hatası:', error);
         if (error.response && error.response.status === 404) {
           this.errorMessage = 'Kurs bulunamadı';
-          alert('Kurs bulunamadı');
+          toast.info('Arama kriterlerinize uygun kurs bulunamadı.', 'Arama Sonucu');
         } else {
           this.errorMessage = error.response?.data?.error || 'Kurs arama sırasında bir hata oluştu.';
-          alert(this.errorMessage);
+          toast.error(this.errorMessage, 'Arama Hatası');
         }
         this.searchedCourses = [];
       } finally {
@@ -578,45 +774,178 @@ export default {
       const currentCount = course.student_count || 0;
       const maxCount = course.max_students || 0;
       if (maxCount > 0 && currentCount >= maxCount) {
-        alert('Kurs dolu, kayıt yapılamaz.');
+        toast.error('Kurs dolu, kayıt yapılamaz.', 'Kayıt Hatası');
       } else {
-        await this.registerToCourse(course.id);
+        try {
+          await this.registerToCourse(course.id);
+          toast.success('Kursa başarıyla kayıt oldunuz!', 'Kayıt Başarılı');
+        } catch (error) {
+          toast.error('Kayıt sırasında bir hata oluştu.', 'Kayıt Hatası');
+        }
       }
     },
-    getImageUrl(path) {
-      if (!path) return 'https://via.placeholder.com/120x120?text=Profil';
-      if (path.startsWith('http')) return path;
-      return `http://localhost:3000${path}`;
+
+    showSuccess(message, title = 'Başarılı') {
+      toast.success(message, title);
     },
-    async handleProfileImageUpload(imagePath) {
+    showError(message, title = 'Hata') {
+      toast.error(message, title);
+    },
+    onBranchListClick(branch) {
+      this.selectedBranch = branch;
+      this.fetchBranchCourses(branch.id);
+    },
+    // Şube markerlarını ekle
+    addBranchMarkers() {
+      // Harita yüklenmemişse çık
+      if (!this.map) {
+        console.warn('Map not initialized yet, skipping branch markers');
+        return;
+      }
+
+      // Eski şube markerlarını temizle
+      if (this.branchMarkers && this.branchMarkers.length > 0) {
+        this.branchMarkers.forEach(marker => {
+          try {
+            this.map.removeLayer(marker);
+          } catch (error) {
+            console.warn('Error removing old branch marker:', error);
+          }
+        });
+        this.branchMarkers = [];
+      }
+      
+      if (!this.allBranches) return;
+
       try {
-        this.profile.image_path = imagePath;
-        // Profil bilgilerini güncelle
-        await this.updateProfile();
-        this.showSuccess('Profil fotoğrafı başarıyla güncellendi');
+        // Yeni şube markerlarını ekle
+        this.allBranches.forEach(branch => {
+          if (branch.latitude && branch.longitude) {
+            const branchIcon = L.icon({
+              iconUrl: branchIconPng,
+              iconSize: [32, 32],
+              iconAnchor: [16, 32],
+              popupAnchor: [0, -32]
+            });
+
+            const marker = L.marker([parseFloat(branch.latitude), parseFloat(branch.longitude)], {
+              icon: branchIcon
+            }).addTo(this.map);
+
+            // Şube marker'ına tıklandığında popup
+            marker.bindPopup(`<div style="padding: 8px 12px;">
+                               <strong style="color: #2196F3; font-size: 16px;">${branch.name}</strong>
+                             </div>`);
+
+            this.branchMarkers.push(marker);
+          }
+        });
       } catch (error) {
-        console.error('Profil fotoğrafı güncellenirken hata:', error);
-        this.showError('Profil fotoğrafı güncellenirken bir hata oluştu');
+        console.error('Error adding branch markers:', error);
       }
     },
-    showSuccess(message) {
-      alert(message); // veya daha güzel bir bildirim sistemi kullanabilirsiniz
+    async fetchAllBranches() {
+      try {
+        const response = await axios.get('/api/branches');
+        this.allBranches = response.data;
+      } catch (error) {
+        console.error('Şubeler alınamadı:', error);
+        this.allBranches = [];
+      }
     },
-    showError(message) {
-      alert(message); // veya daha güzel bir bildirim sistemi kullanabilirsiniz
+    async fetchAvailableTeachers() {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get('/api/teachers', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        this.availableTeachers = response.data;
+      } catch (error) {
+        console.error('Öğretmenler alınamadı:', error);
+        this.availableTeachers = [];
+      }
+    },
+    clearFilters() {
+      this.searchFilters = {
+        language: '',
+        level: '',
+        status: '',
+        day: '',
+        timeSlot: '',
+        branch: '',
+        teacher: '',
+        maxStudents: ''
+      };
     }
   },
   mounted() {
     this.fetchMyCourses();
     this.fetchStudentName();
     this.fetchStudentProfile();
+    // Harita açılır açılmaz tüm şubeleri getir
+    this.fetchAllBranches();
+    this.fetchAvailableTeachers();
+  },
+
+  beforeUnmount() {
+    // Component yok edilmeden önce tüm markerları temizle
+    if (this.currentMarker && this.map) {
+      try {
+        this.map.removeLayer(this.currentMarker);
+        this.currentMarker = null;
+      } catch (error) {
+        console.warn('Error removing current marker on unmount:', error);
+      }
+    }
+    
+    if (this.branchMarkers && this.branchMarkers.length > 0) {
+      this.branchMarkers.forEach(marker => {
+        if (this.map) {
+          try {
+            this.map.removeLayer(marker);
+          } catch (error) {
+            console.warn('Error removing branch marker on unmount:', error);
+          }
+        }
+      });
+      this.branchMarkers = [];
+    }
+    
+    // Haritayı kaldır
+    if (this.map) {
+      try {
+        this.map.remove();
+        this.map = null;
+      } catch (error) {
+        console.warn('Error removing map on unmount:', error);
+      }
+    }
+    
+    console.log('Tüm markerlar ve harita temizlendi (component unmount)');
   },
   watch: {
     currentTab(newTab) {
       if (newTab === 'register') {
         this.$nextTick(() => {
-          this.loadGoogleMapsScript();
+          // Harita yoksa oluştur, varsa sadece marker'ları temizle
+          if (!this.map) {
+            this.initMap();
+          } else {
+            // Harita zaten varsa sadece kullanıcı marker'ını temizle
+            this.clearUserLocationMarkers();
+            // Haritayı yeniden boyutlandır
+            setTimeout(() => {
+              this.map.invalidateSize();
+            }, 100);
+          }
         });
+      } else {
+        // Diğer tablara geçince sadece kullanıcı konum markerlarını temizle
+        if (this.map) {
+          this.clearUserLocationMarkers();
+        }
       }
     },
     selectedLocation: {
@@ -626,160 +955,369 @@ export default {
           this.getNearestBranch();
         }
       }
+    },
+    allBranches() {
+      // Harita varsa ve register tab'indaysak şube markerlarını ekle
+      if (this.map && this.currentTab === 'register') {
+        this.$nextTick(() => {
+          this.addBranchMarkers();
+        });
+      }
     }
   }
 }
 </script>
 
 <style scoped>
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css');
+
 .student-container {
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 }
 
 .student-header {
-  background-color: #fff;
-  padding: 1rem 2rem;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  padding: 30px;
+  margin-bottom: 30px;
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .student-header h1 {
+  color: white;
   margin: 0;
-  color: #333;
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.student-header h1::before {
+  content: '\f19d';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
 }
 
 .logout-btn {
-  padding: 0.5rem 1rem;
-  background-color: #f44336;
+  background: rgba(255, 255, 255, 0.2);
   color: white;
   border: none;
-  border-radius: 4px;
+  padding: 12px 24px;
+  border-radius: 30px;
   cursor: pointer;
+  font-weight: 600;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.logout-btn::before {
+  content: '\f2f5';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  margin-right: 8px;
+}
+
+.logout-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
 }
 
 .student-content {
-  padding: 2rem;
   display: flex;
-  gap: 2rem;
+  gap: 30px;
 }
 
 .student-nav {
-  width: 200px;
-  background: white;
-  padding: 1rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  width: 280px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  padding: 25px;
+  height: fit-content;
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+  border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .nav-btn {
   width: 100%;
-  padding: 0.75rem;
-  margin-bottom: 0.5rem;
-  text-align: left;
-  background: none;
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 15px;
   cursor: pointer;
-  color: #666;
+  font-weight: 500;
+  font-size: 16px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
+.nav-btn:nth-child(1)::before { content: '\f19d'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+.nav-btn:nth-child(2)::before { content: '\f133'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+.nav-btn:nth-child(3)::before { content: '\f007'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+.nav-btn:nth-child(4)::before { content: '\f067'; font-family: 'Font Awesome 6 Free'; font-weight: 900; }
+
 .nav-btn:hover {
-  background-color: #f5f5f5;
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateX(8px);
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
 }
 
 .nav-btn.active {
-  background-color: #2196F3;
-  color: white;
+  background: rgba(255, 255, 255, 0.25);
+  font-weight: 700;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+  transform: translateX(5px);
 }
 
 .tab-content {
   flex: 1;
-  background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  padding: 30px;
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+  border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 h2 {
   margin-top: 0;
-  color: #333;
-  margin-bottom: 1.5rem;
+  color: white;
+  margin-bottom: 2rem;
+  font-size: 2rem;
+  font-weight: 700;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.courses-tab h2::before {
+  content: '\f19d';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+}
+
+.schedule-tab h2::before {
+  content: '\f133';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+}
+
+.profile-tab h2::before {
+  content: '\f007';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+}
+
+.register-tab h2::before {
+  content: '\f067';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+}
+
+.courses-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.course-item {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  padding: 25px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.course-item:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+.course-item h3 {
+  color: white;
+  margin: 0 0 15px 0;
+  font-size: 1.3rem;
+  font-weight: 700;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.course-item p {
+  color: rgba(255, 255, 255, 0.9);
+  margin: 8px 0;
+  font-weight: 500;
 }
 
 .weekly-schedule-table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 1rem;
+  margin-top: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  overflow: hidden;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
 }
-.weekly-schedule-table th, .weekly-schedule-table td {
-  border: 1px solid #ddd;
-  padding: 6px;
+
+.weekly-schedule-table th {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 15px 10px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1rem;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+  border: none;
+}
+
+.weekly-schedule-table td {
+  padding: 12px 8px;
   text-align: center;
   min-width: 80px;
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  font-weight: 500;
 }
+
 .course-cell {
-  background: #e3f2fd;
-  color: #1976d2;
-  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-radius: 8px;
   margin: 2px 0;
-  padding: 2px 4px;
-  font-size: 0.95em;
+  padding: 6px 8px;
+  font-size: 0.9em;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .welcome-message {
+  color: white;
   font-size: 1.2rem;
-  color: #666;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  font-weight: 500;
 }
 
 .profile-form {
-  max-width: 500px;
+  max-width: 600px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
 }
+
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: 25px;
 }
+
 .form-group label {
   display: block;
-  margin-bottom: 0.5rem;
-  color: #666;
+  margin-bottom: 8px;
+  color: white;
+  font-weight: 600;
+  font-size: 1.1rem;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
+
 .form-group input {
   width: 100%;
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  padding: 15px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(5px);
+  color: white;
+  font-size: 16px;
+  transition: all 0.3s ease;
 }
+
+.form-group input::placeholder {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
 .save-btn {
-  padding: 0.5rem 1rem;
-  background-color: #4CAF50;
+  padding: 15px 30px;
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 15px;
   cursor: pointer;
+  font-weight: 700;
+  font-size: 16px;
+  transition: all 0.3s ease;
+  box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+  position: relative;
+  overflow: hidden;
+}
+
+.save-btn::before {
+  content: '\f0c7';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  margin-right: 10px;
+}
+
+.save-btn:hover {
+  background: linear-gradient(135deg, #45a049 0%, #4CAF50 100%);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(76, 175, 80, 0.5);
 }
 
 .register-tab {
-  max-width: 1200px;
-  margin: 0 auto;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 24px rgba(33,150,243,0.10), 0 1.5px 4px rgba(0,0,0,0.04);
-  padding: 32px 24px 32px 24px;
+  background: transparent;
 }
 
 .search-section {
   margin: 24px 0 32px 0;
   padding: 28px 24px;
-  background: #f4f8fb;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(33,150,243,0.06);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 15px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .search-filters {
-  display: flex;
-  gap: 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
   margin-bottom: 24px;
   flex-wrap: wrap;
 }
@@ -792,39 +1330,116 @@ h2 {
 
 .filter-group label {
   font-weight: 600;
-  color: #1976d2;
+  color: white;
   margin-bottom: 2px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  font-size: 0.9rem;
 }
 
-.filter-group select {
-  padding: 10px;
-  border: 1.5px solid #b3c6e0;
-  border-radius: 6px;
+.filter-group select,
+.filter-group .price-input {
+  padding: 10px 12px;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
   min-width: 160px;
-  font-size: 15px;
-  background: #fff;
-  transition: border 0.2s;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+  transition: all 0.3s ease;
 }
-.filter-group select:focus {
+
+.filter-group select:focus,
+.filter-group .price-input:focus {
   border-color: #2196F3;
   outline: none;
+  background: white;
+  box-shadow: 0 0 10px rgba(33, 150, 243, 0.3);
+  transform: translateY(-1px);
 }
 
-.search-btn {
-  padding: 10px 28px;
-  background: linear-gradient(90deg, #2196F3 0%, #4CAF50 100%);
-  color: white;
+.price-input::placeholder {
+  color: #666;
+  font-style: italic;
+}
+
+.filter-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.search-btn,
+.clear-btn {
+  padding: 12px 28px;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
   font-size: 16px;
-  align-self: flex-end;
-  box-shadow: 0 2px 8px rgba(33,150,243,0.08);
-  transition: background 0.2s;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+  justify-content: center;
 }
+
+.search-btn {
+  background: linear-gradient(135deg, #2196F3 0%, #4CAF50 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(33, 150, 243, 0.3);
+}
+
 .search-btn:hover {
-  background: linear-gradient(90deg, #1976d2 0%, #388e3c 100%);
+  background: linear-gradient(135deg, #1976d2 0%, #388e3c 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(33, 150, 243, 0.4);
+}
+
+.clear-btn {
+  background: linear-gradient(135deg, #f44336 0%, #e91e63 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(244, 67, 54, 0.3);
+}
+
+.clear-btn:hover {
+  background: linear-gradient(135deg, #d32f2f 0%, #c2185b 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(244, 67, 54, 0.4);
+}
+
+@media (max-width: 1200px) {
+  .search-filters {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 15px;
+  }
+}
+
+@media (max-width: 768px) {
+  .search-filters {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  
+  .filter-actions {
+    grid-column: 1 / -1;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .search-btn,
+  .clear-btn {
+    width: 100%;
+    max-width: 200px;
+  }
+}
+
+@media (max-width: 480px) {
+  .search-filters {
+    grid-template-columns: 1fr;
+  }
 }
 
 .search-results {
@@ -872,7 +1487,7 @@ h2 {
   color: #2196F3;
   font-weight: 600;
 }
-.select-btn, .register-btn {
+.register-btn {
   width: 100%;
   padding: 10px;
   margin-top: 10px;
@@ -886,15 +1501,18 @@ h2 {
   box-shadow: 0 2px 8px rgba(33,150,243,0.08);
   transition: background 0.2s;
 }
-.select-btn:hover, .register-btn:hover {
+.register-btn:hover {
   background: linear-gradient(90deg, #388e3c 0%, #1976d2 100%);
 }
 
 .location-section {
-  background: #f8f9fa;
-  padding: 20px;
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  padding: 25px;
+  border-radius: 15px;
   margin-bottom: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
 }
 
 .location-input {
@@ -928,46 +1546,53 @@ h2 {
   box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
 }
 
-.branches-section {
-  margin: 20px 0;
-  padding: 0 20px;
+.branches-list-section {
+  margin: 24px 0 16px 0;
+  padding: 18px 16px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(33,150,243,0.08);
 }
-
-.nearest-branch {
-  margin-bottom: 20px;
-}
-
-.branch-list {
+.branches-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-
-.branch-item {
-  padding: 12px 15px;
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
+.branch-list-item {
+  padding: 12px 18px;
+  background: #fff;
+  border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 1.1em;
+  font-size: 1.08em;
+  border: 2px solid transparent;
+  transition: box-shadow 0.2s, border 0.2s, background 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
-
-.branch-item:hover {
-  background-color: #f5f5f5;
-  transform: translateX(5px);
+.branch-list-item.selected {
+  border: 2px solid #4CAF50;
+  background: #e8f5e9;
+  font-weight: 600;
 }
-
-.branch-item.selected {
-  background-color: #4CAF50;
-  color: white;
-  border-color: #4CAF50;
+.branch-list-item:hover {
+  background: #f1f8e9;
+  border-color: #81c784;
 }
-
-h3 {
-  margin-bottom: 15px;
-  color: #333;
-  font-size: 1.2em;
+.branch-distance {
+  color: #2196F3;
+  font-size: 0.98em;
+  margin-left: 8px;
+}
+.branch-courses-section {
+  margin: 24px 0 0 0;
+  padding: 18px 16px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(33,150,243,0.08);
 }
 
 .loading-spinner {
@@ -975,17 +1600,29 @@ h3 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 50px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.loading-spinner p {
+  color: white;
+  font-weight: 600;
+  font-size: 1.1rem;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
 }
 
 .spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #3498db;
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top: 4px solid white;
   border-radius: 50%;
   animation: spin 1s linear infinite;
-  margin-bottom: 10px;
+  margin-bottom: 15px;
+  box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
 }
 
 @keyframes spin {
@@ -1199,5 +1836,32 @@ h3 {
   .search-section {
     padding: 16px 4px;
   }
+}
+
+/* Leaflet için özel stiller */
+:deep(.leaflet-container) {
+  height: 400px !important;
+  width: 100% !important;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+:deep(.leaflet-control-zoom) {
+  border: none !important;
+  border-radius: 8px !important;
+}
+
+:deep(.leaflet-control-zoom a) {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid #ddd !important;
+  color: #333 !important;
+  font-size: 16px !important;
+  line-height: 28px !important;
+  text-decoration: none !important;
+}
+
+:deep(.leaflet-control-zoom a:hover) {
+  background-color: #fff !important;
+  color: #2196F3 !important;
 }
 </style> 

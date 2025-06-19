@@ -25,7 +25,6 @@
                      :checked="selectedClassroom !== null"
                      @change="selectedClassroom = selectedClassroom ? null : classrooms[0]">
             </th>
-            <th>ID</th>
             <th>Sınıf Adı</th>
             <th>Şube</th>
             <th>Kapasite</th>
@@ -41,7 +40,6 @@
                      :checked="selectedClassroom?.id === classroom.id"
                      @click.stop="selectedClassroom = selectedClassroom?.id === classroom.id ? null : classroom">
             </td>
-            <td>{{ classroom.id }}</td>
             <td>{{ classroom.name }}</td>
             <td>{{ classroom.branch_name }}</td>
             <td>{{ classroom.capacity }}</td>
@@ -103,6 +101,7 @@
 <script>
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
+import toast from '@/utils/toast'
 
 export default {
   name: 'ClassroomsView',
@@ -179,7 +178,8 @@ export default {
 
     // Sınıf silme
     const deleteClassroom = async (id) => {
-      if (confirm('Bu sınıfı silmek istediğinizden emin misiniz?')) {
+      const confirmed = await toast.confirm('Bu sınıfı silmek istediğinizden emin misiniz?', 'Sınıf Silme')
+      if (confirmed) {
         try {
           await axios.delete(`/api/classrooms/${id}`)
           showSuccess('Sınıf başarıyla silindi')
@@ -206,11 +206,11 @@ export default {
 
     // Bildirim fonksiyonları
     const showSuccess = (message) => {
-      alert(message)
+      toast.success(message)
     }
 
     const showError = (message) => {
-      alert(message)
+      toast.error(message)
     }
 
     onMounted(() => {
@@ -415,5 +415,110 @@ input[type="number"] {
   background-color: #4CAF50;
   color: white;
   border: none;
+}
+
+/* Mobil Responsive Tasarım */
+@media (max-width: 768px) {
+  .classrooms-page {
+    padding: 10px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+
+  .header-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+  }
+
+  .header-buttons button {
+    padding: 12px 16px;
+    font-size: 14px;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  /* Tablo mobil görünümü */
+  .classrooms-list {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    min-width: 600px;
+    font-size: 12px;
+  }
+
+  th, td {
+    padding: 8px 4px;
+    min-width: 80px;
+  }
+
+  /* Modal mobil optimizasyonu */
+  .modal-content {
+    width: 95% !important;
+    max-width: 95% !important;
+    margin: 10px;
+    padding: 15px;
+  }
+
+  .form-group {
+    margin-bottom: 12px;
+  }
+
+  .form-group label {
+    font-size: 14px;
+  }
+
+  .form-group input,
+  .form-group select {
+    padding: 12px;
+    font-size: 16px; /* iOS zoom'u engellemek için */
+    border-radius: 6px;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 15px;
+  }
+
+  .form-actions button {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 480px) {
+  .classrooms-page {
+    padding: 5px;
+  }
+
+  .page-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .header-buttons {
+    grid-template-columns: 1fr;
+  }
+
+  table {
+    font-size: 11px;
+    min-width: 500px;
+  }
+
+  th, td {
+    padding: 6px 2px;
+  }
+
+  .modal-content {
+    padding: 10px;
+  }
 }
 </style> 

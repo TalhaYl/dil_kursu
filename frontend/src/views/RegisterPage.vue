@@ -2,11 +2,10 @@
   <div class="register-container">
     <div class="register-card">
       <div class="header">
-        <h1>Kayıt Ol</h1>
+        <h1>Öğrenci Kayıt</h1>
         <button @click="goToHome" class="home-btn">Anasayfaya Dön</button>
       </div>
       <form @submit.prevent="handleRegister" class="register-form">
-        <!-- Ortak Bilgiler -->
         <div class="form-group">
           <label for="name">Ad Soyad</label>
           <input 
@@ -53,58 +52,12 @@
           >
         </div>
 
-        <div class="form-group">
-          <label for="role">Rol</label>
-          <select id="role" v-model="formData.role" required>
-            <option value="">Rol seçiniz</option>
-            <option value="student">Öğrenci</option>
-            <option value="teacher">Öğretmen</option>
-          </select>
-        </div>
-
-        <!-- Şube Seçimi (Sadece öğretmenler için) -->
-        <div class="form-group" v-if="formData.role === 'teacher'">
-          <label for="branch">Şube</label>
-          <select id="branch" v-model="formData.branch_id" required>
-            <option value="">Şube seçiniz</option>
-            <option v-for="branch in branches" :key="branch.id" :value="branch.id">
-              {{ branch.name }}
-            </option>
-          </select>
-        </div>
-
-        <!-- Öğretmen için ek alanlar -->
-        <template v-if="formData.role === 'teacher'">
-          <div class="form-group">
-            <label for="languages">Bildiği Diller</label>
-            <select id="languages" v-model="formData.languages" multiple required>
-              <option v-for="language in languages" :key="language.id" :value="language.id">
-                {{ language.name }}
-              </option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="working_days">Çalışma Günleri</label>
-            <div class="checkbox-group">
-              <label v-for="day in workingDays" :key="day.value" class="checkbox-label">
-                <input 
-                  type="checkbox" 
-                  :value="day.value" 
-                  v-model="formData.working_days"
-                >
-                {{ day.label }}
-              </label>
-            </div>
-          </div>
-        </template>
-
         <div v-if="message" :class="['message', message.type]">
           {{ message.text }}
         </div>
 
         <button type="submit" class="register-btn" :disabled="loading">
-          {{ loading ? 'Kaydediliyor...' : 'Kayıt Ol' }}
+          {{ loading ? 'Kaydediliyor...' : 'Öğrenci Olarak Kayıt Ol' }}
         </button>
       </form>
 
@@ -117,7 +70,7 @@
 
 <script>
 import axios from 'axios';
-import { ElMessage } from 'element-plus';
+import toast from '@/utils/toast';
 
 export default {
   name: 'RegisterPage',
@@ -128,46 +81,22 @@ export default {
         email: '',
         password: '',
         phone: '',
-        role: '',
-        branch_id: '',
-        languages: [],
-        working_days: []
+        role: 'student'
       },
-      branches: [],
-      languages: [],
-      workingDays: [
-        { value: 'monday', label: 'Pazartesi' },
-        { value: 'tuesday', label: 'Salı' },
-        { value: 'wednesday', label: 'Çarşamba' },
-        { value: 'thursday', label: 'Perşembe' },
-        { value: 'friday', label: 'Cuma' },
-        { value: 'saturday', label: 'Cumartesi' },
-        { value: 'sunday', label: 'Pazar' }
-      ],
       loading: false,
       message: null
-    }
-  },
-  async created() {
-    try {
-      // Şubeleri yükle
-      const branchesResponse = await axios.get('http://localhost:3000/api/branches');
-      this.branches = branchesResponse.data;
-      // Dilleri yükle
-      const languagesResponse = await axios.get('http://localhost:3000/api/languages');
-      this.languages = languagesResponse.data;
-    } catch (error) {
-      console.error('Veri yüklenirken hata:', error);
-      ElMessage.error('Veriler yüklenirken bir hata oluştu');
     }
   },
   methods: {
     async handleRegister() {
       try {
         this.loading = true;
+        
+        console.log('Öğrenci kayıt verisi:', this.formData);
+        
         const response = await axios.post('http://localhost:3000/api/users/register', this.formData);
         if (response.data.success) {
-          ElMessage.success('Kayıt başarılı! Giriş sayfasına yönlendiriliyorsunuz...');
+          toast.success('Kayıt başarılı! Giriş sayfasına yönlendiriliyorsunuz...');
           setTimeout(() => {
             this.$router.push('/login');
           }, 2000);
@@ -177,7 +106,7 @@ export default {
         if (error.response) {
           errorMessage = error.response.data.error || errorMessage;
         }
-        ElMessage.error(errorMessage);
+        toast.error(errorMessage);
       } finally {
         this.loading = false;
       }
@@ -190,149 +119,245 @@ export default {
 </script>
 
 <style scoped>
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css');
+
 .register-container {
   min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: #f5f5f5;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
 }
 
 .register-card {
-  background: white;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(20px);
+  padding: 40px;
+  border-radius: 25px;
+  box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   width: 100%;
-  max-width: 400px;
+  max-width: 450px;
+  position: relative;
+  overflow: hidden;
+}
+
+.register-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  margin-bottom: 2.5rem;
 }
 
 .header h1 {
   margin: 0;
-  color: #333;
-  font-size: 1.8rem;
+  color: white;
+  font-size: 2rem;
+  font-weight: 700;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header h1::before {
+  content: '\f501';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  color: #4CAF50;
 }
 
 .home-btn {
-  padding: 0.5rem 1rem;
-  background-color: #2196F3;
+  padding: 12px 20px;
+  background: rgba(255, 255, 255, 0.2);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 25px;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.home-btn::before {
+  content: '\f015';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
 }
 
 .home-btn:hover {
-  background-color: #1976D2;
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
 }
 
 .register-form {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 2rem;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 8px;
+  position: relative;
 }
 
 label {
-  color: #666;
-  font-size: 0.9rem;
-}
-
-input, select {
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  color: white;
   font-size: 1rem;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-input:focus, select:focus {
+label[for="name"]::before { content: '\f007'; font-family: 'Font Awesome 6 Free'; font-weight: 900; color: #4CAF50; }
+label[for="email"]::before { content: '\f0e0'; font-family: 'Font Awesome 6 Free'; font-weight: 900; color: #2196F3; }
+label[for="password"]::before { content: '\f023'; font-family: 'Font Awesome 6 Free'; font-weight: 900; color: #FF9800; }
+label[for="phone"]::before { content: '\f095'; font-family: 'Font Awesome 6 Free'; font-weight: 900; color: #9C27B0; }
+
+input {
+  padding: 15px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 15px;
+  font-size: 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(5px);
+  color: white;
+  transition: all 0.3s ease;
+}
+
+input::placeholder {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+input:focus {
   outline: none;
-  border-color: #2196F3;
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
 }
 
 .register-btn {
-  padding: 0.75rem;
-  background-color: #2196F3;
+  padding: 18px 0;
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 20px;
   cursor: pointer;
-  font-size: 1rem;
-  margin-top: 1rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-top: 1.5rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.register-btn::before {
+  content: '\f501';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+}
+
+.register-btn::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: left 0.5s;
 }
 
 .register-btn:hover:not(:disabled) {
-  background-color: #1976D2;
+  background: linear-gradient(135deg, #45a049 0%, #4CAF50 100%);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(76, 175, 80, 0.5);
+}
+
+.register-btn:hover:not(:disabled)::after {
+  left: 100%;
 }
 
 .register-btn:disabled {
-  background-color: #ccc;
+  background: rgba(255, 255, 255, 0.1);
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .login-link {
   text-align: center;
-  margin-top: 1.5rem;
-  color: #666;
+  margin-top: 2rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
 }
 
 .login-link a {
-  color: #2196F3;
+  color: white;
   text-decoration: none;
+  font-weight: 700;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  position: relative;
+  transition: all 0.3s ease;
 }
 
 .login-link a:hover {
-  text-decoration: underline;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+  transform: translateY(-1px);
 }
 
 .message {
-  padding: 1rem;
-  border-radius: 4px;
+  padding: 1.2rem;
+  border-radius: 15px;
   margin-top: 1rem;
   text-align: center;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-weight: 600;
 }
 
 .success {
-  background-color: #dff0d8;
-  color: #3c763d;
-  border: 1px solid #d6e9c6;
+  background: rgba(76, 175, 80, 0.2);
+  color: #4CAF50;
+  border-color: rgba(76, 175, 80, 0.3);
+  box-shadow: 0 5px 15px rgba(76, 175, 80, 0.1);
 }
 
 .error {
-  background-color: #f2dede;
-  color: #a94442;
-  border: 1px solid #ebccd1;
-}
-
-.checkbox-group {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
-  margin-top: 5px;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  cursor: pointer;
-}
-
-select[multiple] {
-  height: 120px;
+  background: rgba(244, 67, 54, 0.2);
+  color: #f44336;
+  border-color: rgba(244, 67, 54, 0.3);
+  box-shadow: 0 5px 15px rgba(244, 67, 54, 0.1);
 }
 </style> 

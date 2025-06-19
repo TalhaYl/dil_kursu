@@ -23,7 +23,7 @@
             <th>
               <input type="checkbox" v-model="selectAll" @change="toggleSelectAll">
             </th>
-            <th>ID</th>
+            <th>Fotoğraf</th>
             <th>Ad Soyad</th>
             <th>E-posta</th>
             <th>Telefon</th>
@@ -32,15 +32,28 @@
             <th>Müsait Günler</th>
             <th>Durum</th>
             <th>Kurslar</th>
-            <th>İşlemler</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="teacher in teachers" :key="teacher.id">
-            <td>
+          <tr v-for="teacher in teachers" :key="teacher.id" 
+              :class="{ 'selected': selectedTeachers.includes(teacher.id) }"
+              @click="toggleTeacherSelection(teacher.id)">
+            <td @click.stop>
               <input type="checkbox" v-model="selectedTeachers" :value="teacher.id">
             </td>
-            <td>{{ teacher.id }}</td>
+            <td>
+              <div class="teacher-photo">
+                <img 
+                  v-if="teacher.image_path" 
+                  :src="`http://localhost:3000${teacher.image_path}`" 
+                  :alt="teacher.name"
+                  class="teacher-avatar"
+                />
+                <div v-else class="no-photo">
+                  <i class="fas fa-user"></i>
+                </div>
+              </div>
+            </td>
             <td>{{ teacher.name }}</td>
             <td>{{ teacher.email }}</td>
             <td>{{ teacher.phone }}</td>
@@ -90,14 +103,6 @@
                 <span v-if="!teacher.courses || teacher.courses.length === 0">Kurs yok</span>
               </div>
             </td>
-            <td>
-              <button class="edit-btn" @click="editTeacher(teacher)">
-                <i class="fas fa-edit"></i>
-              </button>
-              <button class="delete-btn" @click="deleteTeacher(teacher)">
-                <i class="fas fa-trash"></i>
-              </button>
-            </td>
           </tr>
         </tbody>
       </table>
@@ -116,6 +121,15 @@
           <div class="form-group">
             <label>E-posta <span class="required">*</span></label>
             <input type="email" v-model="teacherForm.email" required>
+          </div>
+
+          <div class="form-group" v-if="!editingTeacher">
+            <label>Şifre</label>
+            <input type="password" v-model="teacherForm.password" placeholder="Boş bırakılırsa otomatik oluşturulur">
+            <small class="help-text">
+              <i class="fas fa-info-circle"></i>
+              Şifre boş bırakılırsa varsayılan şifre "123456" olarak ayarlanır.
+            </small>
           </div>
           
           <div class="form-group">
@@ -190,6 +204,14 @@
 
           <div class="form-group" v-if="editingTeacher && editingTeacher.id">
             <label>Öğretmen Fotoğrafı</label>
+            <div v-if="teacherForm.image_path" class="current-image">
+              <img 
+                :src="`http://localhost:3000${teacherForm.image_path}`" 
+                :alt="teacherForm.name"
+                class="current-teacher-image"
+              />
+              <p class="image-info">Mevcut fotoğraf</p>
+            </div>
             <ImageUploader
               v-model="teacherForm.image_path"
               :upload-url="`/api/teachers/${editingTeacher.id}/image`"
@@ -211,7 +233,7 @@
 <script>
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import toast from '@/utils/toast'
 import { useRouter } from 'vue-router'
 import ImageUploader from '@/components/ImageUploader.vue'
 
@@ -233,6 +255,7 @@ export default {
     const teacherForm = ref({
       name: '',
       email: '',
+      password: '',
       phone: '',
       branch_id: '',
       languages: [],
@@ -308,11 +331,11 @@ export default {
 
     // Bildirim fonksiyonları
     const showSuccess = (message) => {
-      ElMessage.success(message)
+      toast.success(message)
     }
 
     const showError = (message) => {
-      ElMessage.error(message)
+      toast.error(message)
     }
 
     // Seçili öğretmen var mı kontrolü
@@ -324,6 +347,16 @@ export default {
         selectedTeachers.value = teachers.value.map(teacher => teacher.id)
       } else {
         selectedTeachers.value = []
+      }
+    }
+
+    // Öğretmen seçimi toggle
+    const toggleTeacherSelection = (teacherId) => {
+      const index = selectedTeachers.value.indexOf(teacherId)
+      if (index > -1) {
+        selectedTeachers.value.splice(index, 1)
+      } else {
+        selectedTeachers.value.push(teacherId)
       }
     }
 
@@ -341,7 +374,8 @@ export default {
 
     // Seçili öğretmenleri sil
     const deleteSelectedTeachers = async () => {
-      if (!confirm(`${selectedTeachers.value.length} öğretmeni silmek istediğinizden emin misiniz?`)) return
+      const confirmed = await toast.confirm(`${selectedTeachers.value.length} öğretmeni silmek istediğinizden emin misiniz?`, 'Öğretmen Silme')
+      if (!confirmed) return
 
       try {
         for (const teacherId of selectedTeachers.value) {
@@ -414,6 +448,7 @@ export default {
             };
             
             console.log(`Teacher ${teacher.id} final processed:`, processedTeacher);
+            console.log(`Teacher ${teacher.id} image_path:`, teacher.image_path);
             return processedTeacher;
           } catch (error) {
             console.error('Error parsing teacher data:', error, teacher)
@@ -567,7 +602,7 @@ export default {
       try {
         const token = localStorage.getItem('token')
         if (!token) {
-          ElMessage.error('Oturum süresi dolmuş. Lütfen tekrar giriş yapın.')
+          toast.error('Oturum süresi dolmuş. Lütfen tekrar giriş yapın.')
           router.push('/login')
           return
         }
@@ -603,6 +638,7 @@ export default {
         const teacherData = {
           name: teacherForm.value.name,
           email: teacherForm.value.email,
+          password: teacherForm.value.password || undefined, // Boşsa undefined gönder
           phone: teacherForm.value.phone,
           branch_id: teacherForm.value.branch_id,
           languages: normalizedLanguages,
@@ -623,11 +659,17 @@ export default {
         if (editingTeacher.value) {
           const response = await axios.put(`/api/teachers/${editingTeacher.value.id}`, teacherData, { headers })
           console.log('API güncelleme yanıtı:', response.data)
-          ElMessage.success('Öğretmen başarıyla güncellendi')
+          toast.success('Öğretmen başarıyla güncellendi')
         } else {
           const response = await axios.post('/api/teachers', teacherData, { headers })
           console.log('API ekleme yanıtı:', response.data)
-          ElMessage.success('Öğretmen başarıyla eklendi')
+          
+          // Varsayılan şifre bilgisi varsa göster
+          if (response.data.temporaryPassword) {
+            toast.success(`Öğretmen başarıyla eklendi. Şifre: ${response.data.temporaryPassword}`)
+          } else {
+            toast.success('Öğretmen başarıyla eklendi')
+          }
         }
 
         showAddModal.value = false
@@ -642,11 +684,11 @@ export default {
         })
         
         if (error.response?.status === 403) {
-          ElMessage.error('Bu işlem için admin yetkisi gerekiyor')
+          toast.error('Bu işlem için admin yetkisi gerekiyor')
         } else if (error.response?.data?.error) {
-          ElMessage.error(error.response.data.error)
+          toast.error(error.response.data.error)
         } else {
-          ElMessage.error('Öğretmen kaydedilirken bir hata oluştu')
+          toast.error('Öğretmen kaydedilirken bir hata oluştu')
         }
       }
     }
@@ -662,6 +704,7 @@ export default {
       teacherForm.value = {
         name: '',
         email: '',
+        password: '',
         phone: '',
         branch_id: '',
         languages: [],
@@ -690,7 +733,8 @@ export default {
 
     // Öğretmen silme
     const deleteTeacher = async (teacher) => {
-      if (!confirm('Bu öğretmeni silmek istediğinizden emin misiniz?')) return
+      const confirmed = await toast.confirm('Bu öğretmeni silmek istediğinizden emin misiniz?', 'Öğretmen Silme')
+      if (!confirmed) return
       
       try {
         await axios.delete(`/api/teachers/${teacher.id}`)
@@ -711,9 +755,22 @@ export default {
         .map(([day]) => day);
     };
 
-    const handleImageUploadSuccess = (response) => {
-      teacherForm.value.image_path = response.image_path;
-      showSuccess('Resim başarıyla yüklendi');
+    const handleImageUploadSuccess = (imagePath) => {
+      console.log('=== FRONTEND RESİM YÜKLEME DEBUG ===');
+      console.log('Upload imagePath:', imagePath);
+      console.log('ImagePath type:', typeof imagePath);
+      
+      if (imagePath) {
+        teacherForm.value.image_path = imagePath;
+        console.log('Form image_path updated:', teacherForm.value.image_path);
+        showSuccess('Resim başarıyla yüklendi');
+        
+        // Öğretmen listesini yeniden yükle
+        fetchTeachers();
+      } else {
+        console.error('Invalid imagePath:', imagePath);
+        showError('Resim yüklendi ama yol bilgisi alınamadı');
+      }
     }
 
     onMounted(() => {
@@ -730,6 +787,7 @@ export default {
       selectAll,
       hasSelectedTeachers,
       toggleSelectAll,
+      toggleTeacherSelection,
       editSelectedTeachers,
       deleteSelectedTeachers,
       editTeacher,
@@ -820,6 +878,19 @@ th, td {
 th {
   background-color: #f8f9fa;
   font-weight: 600;
+}
+
+tr {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+tr:hover {
+  background-color: #f8f9fa;
+}
+
+tr.selected {
+  background-color: #e3f2fd !important;
 }
 
 .edit-btn, .delete-btn {
@@ -1039,5 +1110,195 @@ th {
 .save-btn:disabled {
   background-color: #cccccc;
   cursor: not-allowed;
+}
+
+.teacher-photo {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.teacher-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #e0e0e0;
+}
+
+.no-photo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #f5f5f5;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #999;
+  border: 2px solid #e0e0e0;
+}
+
+.current-image {
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.current-teacher-image {
+  width: 120px;
+  height: 120px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 2px solid #ddd;
+  margin-bottom: 8px;
+}
+
+.image-info {
+  color: #666;
+  font-size: 0.9em;
+  margin: 0;
+}
+
+/* Mobil Responsive Tasarım */
+@media (max-width: 768px) {
+  .teachers-page {
+    padding: 10px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .header-actions button {
+    padding: 12px 16px;
+    font-size: 14px;
+    min-height: 44px;
+  }
+
+  /* Tablo mobil görünümü */
+  .teachers-list {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    min-width: 800px;
+    font-size: 12px;
+  }
+
+  th, td {
+    padding: 8px 4px;
+    min-width: 80px;
+  }
+
+  .teacher-avatar {
+    width: 30px;
+    height: 30px;
+  }
+
+  .no-photo {
+    width: 30px;
+    height: 30px;
+  }
+
+  /* Modal mobil optimizasyonu */
+  .modal-content {
+    width: 95% !important;
+    max-width: 95% !important;
+    margin: 10px;
+    padding: 15px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .modal-content h3 {
+    font-size: 1.2rem;
+    margin-bottom: 15px;
+  }
+
+  .form-group {
+    margin-bottom: 12px;
+  }
+
+  .form-group label {
+    font-size: 14px;
+  }
+
+  .form-group input,
+  .form-group textarea,
+  .form-group select {
+    padding: 12px;
+    font-size: 16px; /* iOS zoom'u engellemek için */
+    border-radius: 6px;
+  }
+
+  .languages-checkbox {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px;
+  }
+
+  .working-days-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .form-actions button {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    min-height: 44px;
+  }
+
+  .help-text {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .teachers-page {
+    padding: 5px;
+  }
+
+  .page-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .header-actions {
+    grid-template-columns: 1fr;
+  }
+
+  table {
+    font-size: 11px;
+    min-width: 600px;
+  }
+
+  th, td {
+    padding: 6px 2px;
+  }
+
+  .modal-content {
+    padding: 10px;
+  }
+
+  .languages-checkbox {
+    grid-template-columns: 1fr;
+  }
+
+  .current-teacher-image {
+    width: 80px;
+    height: 80px;
+  }
 }
 </style> 

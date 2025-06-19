@@ -3,12 +3,6 @@ const db = require('../config/db');
 // Öğretmen müsaitlik kontrolü
 const validateTeacherAvailability = async (teacherId, day, startTime, endTime) => {
   try {
-    console.log(`\n=== validateTeacherAvailability for ${day} ===`);
-    console.log('Teacher ID:', teacherId);
-    console.log('Day:', day);
-    console.log('Start time:', startTime, 'type:', typeof startTime);
-    console.log('End time:', endTime, 'type:', typeof endTime);
-    
     // Öğretmenin çalışma saatlerini getir
     const [teachers] = await db.pool.query(
       'SELECT working_days, working_hours FROM teachers WHERE id = ?',
@@ -19,29 +13,20 @@ const validateTeacherAvailability = async (teacherId, day, startTime, endTime) =
       throw new Error('Öğretmen bulunamadı');
     }
 
-    console.log('Raw teacher data:', {
-      working_days: teachers[0].working_days,
-      working_hours: teachers[0].working_hours
-    });
-
     let workingDays = {};
     let workingHours = {};
 
     try {
       workingDays = typeof teachers[0].working_days === 'string' ? 
         JSON.parse(teachers[0].working_days) : teachers[0].working_days || {};
-      console.log('Parsed working_days:', workingDays);
     } catch (e) {
-      console.error('Error parsing working_days:', e);
       workingDays = {};
     }
 
     try {
       workingHours = typeof teachers[0].working_hours === 'string' ? 
         JSON.parse(teachers[0].working_hours) : teachers[0].working_hours || {};
-      console.log('Parsed working_hours:', workingHours);
     } catch (e) {
-      console.error('Error parsing working_hours:', e);
       workingHours = {};
     }
     
@@ -57,122 +42,215 @@ const validateTeacherAvailability = async (teacherId, day, startTime, endTime) =
     const teacherStart = workingHours[day].start;
     const teacherEnd = workingHours[day].end;
 
-    console.log('Teacher working hours for', day, ':', teacherStart, '-', teacherEnd);
-
     // Saat değerlerinin string olduğundan emin ol
     let courseStart, courseEnd;
     
-    // StartTime kontrolü
     if (typeof startTime === 'string') {
       courseStart = startTime;
     } else if (typeof startTime === 'object' && startTime !== null) {
-      console.error('StartTime is object:', startTime);
       throw new Error(`Geçersiz başlangıç saati formatı: ${JSON.stringify(startTime)}`);
     } else {
       courseStart = String(startTime);
     }
     
-    // EndTime kontrolü  
     if (typeof endTime === 'string') {
       courseEnd = endTime;
     } else if (typeof endTime === 'object' && endTime !== null) {
-      console.error('EndTime is object:', endTime);
       throw new Error(`Geçersiz bitiş saati formatı: ${JSON.stringify(endTime)}`);
     } else {
       courseEnd = String(endTime);
     }
-
-    console.log('Course times:', courseStart, '-', courseEnd);
 
     // Kurs saatlerinin öğretmenin müsait olduğu saatler içinde olup olmadığını kontrol et
     if (courseStart < teacherStart || courseEnd > teacherEnd) {
       throw new Error(`Kurs saatleri (${courseStart}-${courseEnd}) öğretmenin müsait olduğu saatler (${teacherStart}-${teacherEnd}) dışında`);
     }
 
-    console.log('Teacher availability validation passed');
     return true;
   } catch (error) {
-    console.error('validateTeacherAvailability error:', error);
     throw error;
   }
 };
 
-// Çakışma kontrolü
-const checkTimeConflict = async (teacherId, day, startTime, endTime, excludeCourseId = null) => {
-  console.log(`\n=== checkTimeConflict for ${day} ===`);
-  console.log('Teacher ID:', teacherId);
-  console.log('Day:', day);
-  console.log('Start time:', startTime, 'type:', typeof startTime);
-  console.log('End time:', endTime, 'type:', typeof endTime);
-  console.log('Exclude course ID:', excludeCourseId);
-  
+// Öğretmen çakışma kontrolü
+const checkTeacherTimeConflict = async (teacherId, day, startTime, endTime, courseStartDate, courseEndDate, excludeCourseId = null) => {
   let query = `
-    SELECT * FROM courses 
-    WHERE teacher_id = ? 
-    AND JSON_EXTRACT(schedule, '$."${day}".start') IS NOT NULL
-    AND status = 'active'
+    SELECT c.*, u.name as teacher_name FROM courses c
+    LEFT JOIN teachers t ON c.teacher_id = t.id
+    LEFT JOIN users u ON t.user_id = u.id
+    WHERE c.teacher_id = ? 
+    AND JSON_EXTRACT(c.schedule, '$."${day}".start') IS NOT NULL
+    AND c.status = 'active'
   `;
   
   const params = [teacherId];
   
   if (excludeCourseId) {
-    query += ' AND id != ?';
+    query += ' AND c.id != ?';
     params.push(excludeCourseId);
   }
 
-  console.log('Executing query:', query);
-  console.log('Query params:', params);
-
   const [existingCourses] = await db.pool.query(query, params);
-  
-  console.log(`Found ${existingCourses.length} existing courses for teacher ${teacherId}`);
 
   for (const course of existingCourses) {
-    console.log(`\nChecking course ${course.id}:`);
-    console.log('Raw schedule data:', course.schedule);
-    console.log('Schedule type:', typeof course.schedule);
-    
+    // 1. Tarih aralığı çakışma kontrolü
+    const existingStartDate = new Date(course.start_date);
+    const existingEndDate = new Date(course.end_date);
+    const newStartDate = new Date(courseStartDate);
+    const newEndDate = new Date(courseEndDate);
+
+    const dateOverlap = (
+      (newStartDate <= existingEndDate && newEndDate >= existingStartDate)
+    );
+
+    if (!dateOverlap) {
+      continue; // Tarih aralıkları çakışmıyor, bu kursu atlayabiliriz
+    }
+
+    // 2. Saat çakışma kontrolü
     let schedule;
     try {
       if (typeof course.schedule === 'string') {
         schedule = JSON.parse(course.schedule);
-        console.log('Parsed schedule:', schedule);
       } else if (typeof course.schedule === 'object' && course.schedule !== null) {
         schedule = course.schedule;
-        console.log('Schedule is already object:', schedule);
       } else {
-        console.log('Invalid schedule format, skipping course');
         continue;
       }
     } catch (error) {
-      console.error('Error parsing schedule for course', course.id, ':', error);
-      console.error('Raw schedule data that failed:', course.schedule);
-      continue; // Bu kursu atla, diğerlerini kontrol et
+      continue;
     }
     
     if (schedule[day]) {
       const courseStart = schedule[day].start;
       const courseEnd = schedule[day].end;
-      
-      console.log(`Course ${course.id} ${day} schedule:`, courseStart, '-', courseEnd);
-      console.log('New course schedule:', startTime, '-', endTime);
 
-      if (
-        (startTime >= courseStart && startTime < courseEnd) || // Yeni kurs mevcut kursun içinde başlıyor
-        (endTime > courseStart && endTime <= courseEnd) || // Yeni kurs mevcut kursun içinde bitiyor
-        (startTime <= courseStart && endTime >= courseEnd) // Yeni kurs mevcut kursu kapsıyor
-      ) {
-        console.log('Time conflict detected!');
-        throw new Error('Öğretmenin bu saatte başka bir kursu var');
-      } else {
-        console.log('No conflict with this course');
+      const timeOverlap = (
+        (startTime >= courseStart && startTime < courseEnd) || 
+        (endTime > courseStart && endTime <= courseEnd) || 
+        (startTime <= courseStart && endTime >= courseEnd)
+      );
+
+      if (timeOverlap) {
+        const formatDate = (date) => new Date(date).toLocaleDateString('tr-TR');
+        throw new Error(
+          `ÖĞRETMEN ÇAKIŞMASI!\n\n` +
+          `Öğretmen: ${course.teacher_name || 'Bilinmeyen'}\n` +
+          `Gün: ${day}\n` +
+          `Saat Çakışması: ${startTime}-${endTime} ⟷ ${courseStart}-${courseEnd}\n` +
+          `Tarih Çakışması: ${formatDate(newStartDate)}-${formatDate(newEndDate)} ⟷ ${formatDate(existingStartDate)}-${formatDate(existingEndDate)}\n\n` +
+          `Mevcut Kurs: "${course.name}"\n\n` +
+          `Bu öğretmenin aynı gün ve saatte başka bir kursu var!`
+        );
       }
-    } else {
-      console.log(`Course ${course.id} has no schedule for ${day}`);
     }
   }
 
-  console.log('No time conflicts found');
+  return true;
+};
+
+// Sınıf çakışma kontrolü - Tarih aralığı ve saat kontrolü
+const checkClassroomTimeConflict = async (classroomId, day, startTime, endTime, courseStartDate, courseEndDate, excludeCourseId = null) => {
+  console.log('🔍 SINIF ÇAKIŞMA KONTROLÜ BAŞLADI');
+  console.log('Parametreler:', {
+    classroomId,
+    day,
+    startTime,
+    endTime,
+    courseStartDate,
+    courseEndDate,
+    excludeCourseId
+  });
+
+  let query = `
+    SELECT c.*, u.name as teacher_name, cl.name as classroom_name FROM courses c
+    LEFT JOIN teachers t ON c.teacher_id = t.id
+    LEFT JOIN users u ON t.user_id = u.id
+    LEFT JOIN classrooms cl ON c.classroom_id = cl.id
+    WHERE c.classroom_id = ? 
+    AND JSON_EXTRACT(c.schedule, '$."${day}".start') IS NOT NULL
+    AND c.status = 'active'
+  `;
+  
+  const params = [classroomId];
+  
+  if (excludeCourseId) {
+    query += ' AND c.id != ?';
+    params.push(excludeCourseId);
+  }
+
+  console.log('SQL Query:', query);
+  console.log('SQL Params:', params);
+
+  const [existingCourses] = await db.pool.query(query, params);
+  console.log(`Bulunan mevcut kurslar: ${existingCourses.length}`);
+
+  for (const course of existingCourses) {
+    // 1. Tarih aralığı çakışma kontrolü
+    const existingStartDate = new Date(course.start_date);
+    const existingEndDate = new Date(course.end_date);
+    const newStartDate = new Date(courseStartDate);
+    const newEndDate = new Date(courseEndDate);
+
+    const dateOverlap = (
+      (newStartDate <= existingEndDate && newEndDate >= existingStartDate)
+    );
+
+    if (!dateOverlap) {
+      continue; // Tarih aralıkları çakışmıyor, bu kursu atlayabiliriz
+    }
+
+    // 2. Saat çakışma kontrolü
+    let schedule;
+    try {
+      if (typeof course.schedule === 'string') {
+        schedule = JSON.parse(course.schedule);
+      } else if (typeof course.schedule === 'object' && course.schedule !== null) {
+        schedule = course.schedule;
+      } else {
+        continue;
+      }
+    } catch (error) {
+      continue;
+    }
+    
+    if (schedule[day]) {
+      const courseStart = schedule[day].start;
+      const courseEnd = schedule[day].end;
+
+      console.log('⏰ Saat çakışma kontrolü:', {
+        mevcut: `${courseStart}-${courseEnd}`,
+        yeni: `${startTime}-${endTime}`
+      });
+
+      const timeOverlap = (
+        (startTime >= courseStart && startTime < courseEnd) || 
+        (endTime > courseStart && endTime <= courseEnd) || 
+        (startTime <= courseStart && endTime >= courseEnd)
+      );
+
+      console.log('Saat çakışması var mı:', timeOverlap);
+
+      if (timeOverlap) {
+        console.log('🚫 SINIF ÇAKIŞMASI TESPİT EDİLDİ!');
+        const formatDate = (date) => new Date(date).toLocaleDateString('tr-TR');
+        throw new Error(
+          `ÇAKIŞMA TESPİT EDİLDİ!\n\n` +
+          `Sınıf: ${course.classroom_name}\n` +
+          `Gün: ${day}\n` +
+          `Saat Çakışması: ${startTime}-${endTime} ⟷ ${courseStart}-${courseEnd}\n` +
+          `Tarih Çakışması: ${formatDate(newStartDate)}-${formatDate(newEndDate)} ⟷ ${formatDate(existingStartDate)}-${formatDate(existingEndDate)}\n\n` +
+          `Mevcut Kurs: "${course.name}"\n` +
+          `Öğretmen: ${course.teacher_name || 'Bilinmiyor'}\n\n` +
+          `Bu sınıfta aynı gün ve saatte başka bir kurs mevcut!`
+        );
+      }
+    } else {
+      console.log(`📅 Bu kursta ${day} günü ders yok, çakışma yok`);
+    }
+  }
+
+  console.log('✅ Sınıf çakışma kontrolü tamamlandı - çakışma yok');
   return true;
 };
 
@@ -211,15 +289,13 @@ const validateClassroomCapacity = async (classroomId, maxStudents) => {
 // Kurs oluştur
 const createCourse = async (req, res) => {
   try {
-    console.log('=== CREATE COURSE BACKEND DEBUG ===');
-    console.log('Request body:', JSON.stringify(req.body, null, 2));
-    
     const { 
       name,
       teacher_id,
       branch_id,
       classroom_id,
       language,
+      level,
       schedule,
       max_students,
       course_type = 'Physical',
@@ -229,15 +305,7 @@ const createCourse = async (req, res) => {
       image_path
     } = req.body;
 
-    console.log('Extracted schedule:', schedule);
-    console.log('Schedule type:', typeof schedule);
-    
-    if (schedule) {
-      console.log('Schedule entries:');
-      Object.entries(schedule).forEach(([day, times]) => {
-        console.log(`  ${day}:`, times, 'start type:', typeof times?.start, 'end type:', typeof times?.end);
-      });
-    }
+
 
     // Zorunlu alan kontrolü
     if (!name || !teacher_id || !branch_id || !classroom_id || !language || !schedule || !start_date || !end_date) {
@@ -262,51 +330,55 @@ const createCourse = async (req, res) => {
 
     // Her gün için müsaitlik ve çakışma kontrolü
     for (const [day, times] of Object.entries(schedule)) {
-      console.log(`\n=== Validating ${day} ===`);
-      console.log('Times object:', times);
-      console.log('Start value:', times.start, 'type:', typeof times.start);
-      console.log('End value:', times.end, 'type:', typeof times.end);
-      
       try {
+        // Öğretmen müsaitlik kontrolü
         await validateTeacherAvailability(teacher_id, day, times.start, times.end);
-        await checkTimeConflict(teacher_id, day, times.start, times.end);
-        console.log(`${day} validation passed`);
+        
+        // Öğretmen çakışma kontrolü
+        await checkTeacherTimeConflict(teacher_id, day, times.start, times.end, start_date, end_date);
+        
+        // Sınıf çakışma kontrolü (tarih aralığı dahil)
+        await checkClassroomTimeConflict(classroom_id, day, times.start, times.end, start_date, end_date);
+        
       } catch (error) {
-        console.error(`${day} validation failed:`, error.message);
         return res.status(400).json({ 
           error: `${day} günü için hata: ${error.message}` 
         });
       }
     }
-
-    console.log('All validations passed, inserting to database...');
     
     const [result] = await db.pool.query(
       `INSERT INTO courses (
         name, teacher_id, branch_id, classroom_id, 
-        language, schedule, max_students, course_type,
+        language, level, schedule, max_students, course_type,
         start_date, end_date, status, image_path
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         name, teacher_id, branch_id, classroom_id,
-        language, JSON.stringify(schedule), max_students || 20, course_type,
+        language, level || 'A1', JSON.stringify(schedule), max_students || 20, course_type,
         start_date, end_date, status, image_path || null
       ]
     );
 
-    console.log('Course inserted successfully with ID:', result.insertId);
+
 
     // Oluşturulan kursu getir
     const [courseResults] = await db.pool.query(
       `SELECT c.*, 
               b.name as branch_name,
               cl.name as classroom_name,
-              CONCAT(u.name) as teacher_name
+              CONCAT(u.name) as teacher_name,
+              COALESCE(enrollment.current_students, 0) as current_students
        FROM courses c
        LEFT JOIN branches b ON c.branch_id = b.id
        LEFT JOIN classrooms cl ON c.classroom_id = cl.id
        LEFT JOIN teachers t ON c.teacher_id = t.id
        LEFT JOIN users u ON t.user_id = u.id
+       LEFT JOIN (
+           SELECT course_id, COUNT(*) as current_students 
+           FROM student_courses 
+           GROUP BY course_id
+       ) enrollment ON c.id = enrollment.course_id
        WHERE c.id = ?`,
       [result.insertId]
     );
@@ -317,8 +389,6 @@ const createCourse = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Kurs oluşturma hatası:', error);
-    console.error('Error stack:', error.stack);
     res.status(500).json({ 
       error: 'Kurs oluşturulurken bir hata oluştu: ' + error.message 
     });
@@ -335,6 +405,7 @@ const updateCourse = async (req, res) => {
       branch_id,
       classroom_id,
       language,
+      level,
       schedule,
       max_students,
       course_type,
@@ -343,6 +414,8 @@ const updateCourse = async (req, res) => {
       status,
       image_path
     } = req.body;
+
+
 
     // Zorunlu alan kontrolü
     if (!name || !teacher_id || !branch_id || !classroom_id || !language || !schedule || !start_date || !end_date) {
@@ -368,8 +441,15 @@ const updateCourse = async (req, res) => {
     // Her gün için müsaitlik ve çakışma kontrolü
     for (const [day, times] of Object.entries(schedule)) {
       try {
+        // Öğretmen müsaitlik kontrolü
         await validateTeacherAvailability(teacher_id, day, times.start, times.end);
-        await checkTimeConflict(teacher_id, day, times.start, times.end, id);
+        
+        // Öğretmen çakışma kontrolü
+        await checkTeacherTimeConflict(teacher_id, day, times.start, times.end, start_date, end_date, id);
+        
+        // Sınıf çakışma kontrolü (tarih aralığı dahil)
+        await checkClassroomTimeConflict(classroom_id, day, times.start, times.end, start_date, end_date, id);
+        
       } catch (error) {
         return res.status(400).json({ 
           error: `${day} günü için hata: ${error.message}` 
@@ -384,6 +464,7 @@ const updateCourse = async (req, res) => {
         branch_id = ?,
         classroom_id = ?,
         language = ?,
+        level = ?,
         schedule = ?,
         max_students = ?,
         course_type = ?,
@@ -394,7 +475,7 @@ const updateCourse = async (req, res) => {
       WHERE id = ?`,
       [
         name, teacher_id, branch_id, classroom_id,
-        language, JSON.stringify(schedule), max_students || 20, course_type,
+        language, level || 'A1', JSON.stringify(schedule), max_students || 20, course_type,
         start_date, end_date, status, image_path || null, id
       ]
     );
@@ -404,12 +485,18 @@ const updateCourse = async (req, res) => {
       `SELECT c.*, 
               b.name as branch_name,
               cl.name as classroom_name,
-              CONCAT(u.name) as teacher_name
+              CONCAT(u.name) as teacher_name,
+              COALESCE(enrollment.current_students, 0) as current_students
        FROM courses c
        LEFT JOIN branches b ON c.branch_id = b.id
        LEFT JOIN classrooms cl ON c.classroom_id = cl.id
        LEFT JOIN teachers t ON c.teacher_id = t.id
        LEFT JOIN users u ON t.user_id = u.id
+       LEFT JOIN (
+           SELECT course_id, COUNT(*) as current_students 
+           FROM student_courses 
+           GROUP BY course_id
+       ) enrollment ON c.id = enrollment.course_id
        WHERE c.id = ?`,
       [id]
     );
@@ -424,7 +511,6 @@ const updateCourse = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Kurs güncelleme hatası:', error);
     res.status(500).json({ 
       error: 'Kurs güncellenirken bir hata oluştu: ' + error.message 
     });
@@ -448,7 +534,6 @@ const deleteCourse = async (req, res) => {
 
     res.json({ message: 'Kurs başarıyla silindi' });
   } catch (error) {
-    console.error('Kurs silme hatası:', error);
     res.status(500).json({ 
       error: 'Kurs silinirken bir hata oluştu: ' + error.message 
     });
@@ -459,6 +544,7 @@ const deleteCourse = async (req, res) => {
 const getCourse = async (req, res) => {
   try {
     const { id } = req.params;
+    
     const [courses] = await db.pool.query(
       `SELECT c.*, 
               b.name as branch_name,
@@ -468,12 +554,18 @@ const getCourse = async (req, res) => {
               t.id as teacher_id,
               t.working_days as teacher_working_days,
               t.working_hours as teacher_working_hours,
-              t.branch_id as teacher_branch_id
+              t.branch_id as teacher_branch_id,
+              COALESCE(enrollment.current_students, 0) as current_students
        FROM courses c
        LEFT JOIN branches b ON c.branch_id = b.id
        LEFT JOIN classrooms cl ON c.classroom_id = cl.id
        LEFT JOIN teachers t ON c.teacher_id = t.id
        LEFT JOIN users u ON t.user_id = u.id
+       LEFT JOIN (
+           SELECT course_id, COUNT(*) as current_students 
+           FROM student_courses 
+           GROUP BY course_id
+       ) enrollment ON c.id = enrollment.course_id
        WHERE c.id = ?`,
       [id]
     );
@@ -497,9 +589,10 @@ const getCourse = async (req, res) => {
         course.schedule = {};
       }
     } catch (error) {
-      console.error('Error parsing schedule for course', course.id, ':', error);
       course.schedule = {};
     }
+
+
 
     // Öğretmen çalışma günleri ve saatlerini parse et
     let teacherWorkingDays = {};
@@ -511,7 +604,6 @@ const getCourse = async (req, res) => {
           JSON.parse(course.teacher_working_days) : course.teacher_working_days;
       }
     } catch (error) {
-      console.error('Error parsing teacher working days:', error);
       teacherWorkingDays = {};
     }
     
@@ -521,7 +613,6 @@ const getCourse = async (req, res) => {
           JSON.parse(course.teacher_working_hours) : course.teacher_working_hours;
       }
     } catch (error) {
-      console.error('Error parsing teacher working hours:', error);
       teacherWorkingHours = {};
     }
 
@@ -536,7 +627,6 @@ const getCourse = async (req, res) => {
 
     res.json(course);
   } catch (error) {
-    console.error('Kurs getirme hatası:', error);
     res.status(500).json({ 
       error: 'Kurs bilgileri getirilirken bir hata oluştu: ' + error.message 
     });
@@ -546,8 +636,6 @@ const getCourse = async (req, res) => {
 // Tüm kursları getir - Alternatif yaklaşım
 const getAllCoursesAlternative = async (req, res) => {
   try {
-    console.log('Fetching all courses from database...');
-    
     // showInactive parametresini kontrol et
     const showInactive = req.query.showInactive === 'true';
     
@@ -561,15 +649,19 @@ const getAllCoursesAlternative = async (req, res) => {
       `SELECT c.*, 
               b.name as branch_name,
               cl.name as classroom_name,
-              cl.capacity as classroom_capacity
+              cl.capacity as classroom_capacity,
+              COALESCE(enrollment.current_students, 0) as current_students
        FROM courses c
        LEFT JOIN branches b ON c.branch_id = b.id
        LEFT JOIN classrooms cl ON c.classroom_id = cl.id
+       LEFT JOIN (
+           SELECT course_id, COUNT(*) as current_students 
+           FROM student_courses 
+           GROUP BY course_id
+       ) enrollment ON c.id = enrollment.course_id
        ${whereClause}
        ORDER BY c.id DESC`
     );
-
-    console.log(`Found ${courses.length} courses in database`);
 
     // Her kurs için öğretmen bilgilerini getir
     const formattedCourses = await Promise.all(courses.map(async (course) => {
@@ -583,7 +675,6 @@ const getAllCoursesAlternative = async (req, res) => {
           schedule = JSON.parse(course.schedule);
         }
       } catch (error) {
-        console.error('Error parsing schedule for course', course.id, ':', error);
         schedule = {};
       }
 
@@ -610,7 +701,6 @@ const getAllCoursesAlternative = async (req, res) => {
               workingDays = typeof teacherData.working_days === 'string' ? 
                 JSON.parse(teacherData.working_days) : (teacherData.working_days || {});
             } catch (e) {
-              console.error('Error parsing working_days for teacher', teacherData.id, ':', e);
               workingDays = {};
             }
             
@@ -618,7 +708,6 @@ const getAllCoursesAlternative = async (req, res) => {
               workingHours = typeof teacherData.working_hours === 'string' ? 
                 JSON.parse(teacherData.working_hours) : (teacherData.working_hours || {});
             } catch (e) {
-              console.error('Error parsing working_hours for teacher', teacherData.id, ':', e);
               workingHours = {};
             }
             
@@ -631,7 +720,7 @@ const getAllCoursesAlternative = async (req, res) => {
             };
           }
         } catch (error) {
-          console.error('Error fetching teacher data for course', course.id, ':', error);
+          // Öğretmen bilgisi alınamadı, null olarak bırak
         }
       }
 
@@ -642,20 +731,9 @@ const getAllCoursesAlternative = async (req, res) => {
         teacher: teacher
       };
     }));
-
-    console.log('Courses formatted successfully, sending response');
-    if (formattedCourses.length > 0) {
-      console.log('=== SAMPLE COURSE WITH TEACHER ===');
-      console.log('Course ID:', formattedCourses[0].id);
-      console.log('Course teacher_id:', formattedCourses[0].teacher_id);
-      console.log('Course teacher_name:', formattedCourses[0].teacher_name);
-      console.log('Teacher object:', formattedCourses[0].teacher);
-      console.log('=== END SAMPLE ===');
-    }
     
     res.json(formattedCourses);
   } catch (error) {
-    console.error('Kursları getirme hatası:', error);
     res.status(500).json({ 
       error: 'Kurslar getirilirken bir hata oluştu: ' + error.message 
     });
@@ -674,7 +752,6 @@ const getClassroomsByBranch = async (req, res) => {
 
     res.json(classrooms);
   } catch (error) {
-    console.error('Sınıfları getirme hatası:', error);
     res.status(500).json({ 
       error: 'Sınıflar getirilirken bir hata oluştu: ' + error.message 
     });

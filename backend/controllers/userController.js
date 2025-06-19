@@ -81,6 +81,8 @@ const login = async (req, res) => {
 
 // Kullanıcı kaydı
 const register = async (req, res) => {
+    console.log('Backend - Gelen tüm req.body:', req.body);
+    
     const { 
         email, 
         password, 
@@ -92,8 +94,22 @@ const register = async (req, res) => {
         branch_id,
         // Öğretmen alanları
         languages, 
-        working_days
+        working_days,
+        working_hours
     } = req.body;
+    
+    console.log('Backend - Destructured veriler:', {
+        email,
+        password: password ? '***' : 'undefined',
+        role,
+        name,
+        phone,
+        address,
+        branch_id,
+        languages,
+        working_days,
+        working_hours
+    });
     
     if (!email || !password || !role || !name) {
         return res.status(400).json({ error: 'Email, şifre, rol ve isim gerekli' });
@@ -139,10 +155,41 @@ const register = async (req, res) => {
                     [userId, phone, address, branch_id ? branch_id : null]
                 );
             } else if (role === 'teacher') {
-                await connection.query(
-                    'INSERT INTO teachers (user_id, working_days, branch_id) VALUES (?, ?, ?)',
-                    [userId, JSON.stringify(working_days || []), branch_id]
+                // Öğretmen için working_hours verisi varsa onu kullan, yoksa working_days
+                const workingHoursData = working_hours || {};
+                const workingDaysData = working_days || {};
+                
+                console.log('Backend - Teacher registration data received:', {
+                    working_hours: workingHoursData,
+                    working_days: workingDaysData,
+                    languages: languages,
+                    branch_id: branch_id
+                });
+                
+                console.log('Backend - JSON stringify test:', {
+                    working_days_json: JSON.stringify(workingDaysData),
+                    working_hours_json: JSON.stringify(workingHoursData)
+                });
+                
+                const [teacherResult] = await connection.query(
+                    'INSERT INTO teachers (user_id, working_days, working_hours, branch_id) VALUES (?, ?, ?, ?)',
+                    [userId, JSON.stringify(workingDaysData), JSON.stringify(workingHoursData), branch_id]
                 );
+                
+                console.log('Backend - Teacher created with ID:', teacherResult.insertId);
+                
+                // Dilleri ekle - language ID'leri kullanarak
+                if (languages && languages.length > 0) {
+                    console.log('Adding languages:', languages);
+                    for (const languageId of languages) {
+                        console.log('Adding language ID:', languageId);
+                        await connection.query(
+                            'INSERT INTO teacher_languages (teacher_id, language_id) VALUES (?, ?)',
+                            [teacherResult.insertId, languageId]
+                        );
+                    }
+                    console.log('Languages added successfully');
+                }
             }
 
             return { userId, email, role, name };
@@ -185,10 +232,18 @@ const addStudent = async (req, res) => {
 
     const { email, password, name, phone, address, branch_id } = req.body;
 
+    // Eksik alanları kontrol et
+    if (!email || !name) {
+        return res.status(400).json({ error: 'E-posta ve ad alanları zorunludur' });
+    }
+
     try {
+        // Şifre gönderilmemişse varsayılan şifre oluştur
+        const defaultPassword = password || '123456';
+        
         const result = await db.executeTransaction(async (connection) => {
             // Önce users tablosuna ekle
-            const hashedPassword = await bcrypt.hash(password, 12);
+            const hashedPassword = await bcrypt.hash(defaultPassword, 12);
             const [roles] = await connection.query('SELECT id FROM roles WHERE name = ?', ['student']);
             
             const [userResult] = await connection.query(
@@ -214,7 +269,9 @@ const addStudent = async (req, res) => {
                 email: result.email,
                 name: result.name,
                 role: 'student'
-            }
+            },
+            // Eğer varsayılan şifre kullanıldıysa bilgi ver
+            ...(password ? {} : { temporaryPassword: defaultPassword, passwordInfo: 'Varsayılan şifre oluşturuldu' })
         });
     } catch (error) {
         console.error('Add student error:', error);
@@ -243,10 +300,17 @@ const addTeacher = async (req, res) => {
     console.log('=== ÖĞRETMEN EKLEME - GELEN VERİ ===');
     console.log('Request body:', JSON.stringify(req.body, null, 2));
 
+    // Eksik alanları kontrol et
+    if (!email || !name) {
+        return res.status(400).json({ error: 'E-posta ve ad alanları zorunludur' });
+    }
+
     try {
+        // Şifre gönderilmemişse varsayılan şifre oluştur
+        const defaultPassword = password || '123456';
+        
         const result = await db.executeTransaction(async (connection) => {
-            // Önce users tablosuna ekle
-            const hashedPassword = await bcrypt.hash(password, 12);
+            const hashedPassword = await bcrypt.hash(defaultPassword, 12);
             const [roles] = await connection.query('SELECT id FROM roles WHERE name = ?', ['teacher']);
 
             const [userResult] = await connection.query(
@@ -304,7 +368,11 @@ const addTeacher = async (req, res) => {
 
             // Dilleri ekle
             if (languages && languages.length > 0) {
-                for (const languageId of languages) {
+                console.log('Processing languages:', languages);
+                const languageIds = await getLanguageIds(languages, connection);
+                console.log('Language IDs obtained:', languageIds);
+                
+                for (const languageId of languageIds) {
                     await connection.query(
                         'INSERT INTO teacher_languages (teacher_id, language_id) VALUES (?, ?)',
                         [teacherResult.insertId, languageId]
@@ -322,7 +390,9 @@ const addTeacher = async (req, res) => {
                 email: result.email,
                 name: result.name,
                 role: 'teacher'
-            }
+            },
+            // Eğer varsayılan şifre kullanıldıysa bilgi ver
+            ...(password ? {} : { temporaryPassword: defaultPassword, passwordInfo: 'Varsayılan şifre oluşturuldu' })
         });
     } catch (error) {
         console.error('Öğretmen ekleme hatası:', {
@@ -567,7 +637,11 @@ const updateTeacher = async (req, res) => {
 
                 // Yeni dilleri ekle
                 if (languages && languages.length > 0) {
-                    for (const languageId of languages) {
+                    console.log('Updating languages:', languages);
+                    const languageIds = await getLanguageIds(languages, connection);
+                    console.log('Language IDs for update:', languageIds);
+                    
+                    for (const languageId of languageIds) {
                         await connection.query(
                             'INSERT INTO teacher_languages (teacher_id, language_id) VALUES (?, ?)',
                             [teacherId, languageId]
