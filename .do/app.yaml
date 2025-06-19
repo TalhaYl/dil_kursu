@@ -1,0 +1,43 @@
+name: dil-kursu
+services:
+  - name: backend
+    source_dir: /backend
+    github:
+      repo: TalhaYl/dil_kursu
+      branch: main
+    run_command: npm start
+    build_command: npm install
+    environment_slug: node-js
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    routes:
+      - path: /api
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+
+  - name: frontend
+    source_dir: /frontend
+    github:
+      repo: TalhaYl/dil_kursu
+      branch: main
+    run_command: npm run preview -- --host 0.0.0.0 --port 4173
+    build_command: npm install && npm run build
+    environment_slug: node-js
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    routes:
+      - path: /
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: VITE_API_URL
+        value: https://${backend.DIGITALOCEAN_APP_URL}
+
+databases:
+  - name: db
+    engine: PG
+    version: "15"
+    production: false 
