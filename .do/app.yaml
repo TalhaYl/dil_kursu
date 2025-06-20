@@ -12,6 +12,12 @@ services:
     instance_size_slug: basic-xxs
     routes:
       - path: /api
+    health_check:
+      http_path: /api/health
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
     envs:
       - key: NODE_ENV
         value: production
@@ -24,20 +30,23 @@ services:
       repo: TalhaYl/dil_kursu
       branch: main
     run_command: npm run preview -- --host 0.0.0.0 --port 4173
-    build_command: npm install && npm run build
+    build_command: npm ci && npm run build
     environment_slug: node-js
     instance_count: 1
     instance_size_slug: basic-xxs
     routes:
       - path: /
+    health_check:
+      http_path: /health
+      period_seconds: 10
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
     envs:
       - key: NODE_ENV
         value: production
       - key: VITE_API_URL
         value: https://${backend.DIGITALOCEAN_APP_URL}
-
-databases:
-  - name: db
-    engine: PG
-    version: "15"
-    production: false 
+      - key: NODE_VERSION
+        value: "18"
+        
